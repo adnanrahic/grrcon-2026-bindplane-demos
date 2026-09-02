@@ -1,16 +1,15 @@
 # Routing connector: splits the merged worker-tier log stream back into its five
 # original sources and sends each to its own destination.
 #
-# Why attributes["appname"]:
-# The ingress syslog source sets `parse_to: attributes`, so the parsed RFC
-# fields (appname, hostname, facility, priority, ...) land in attributes and the
-# body is left as the raw log line the generator emitted. That raw body is what
-# Bindplane Blueprints match on.
-#
-# With the source default (`parse_to: body`) the parsed fields are moved INTO
-# the body instead, and the condition would need to be body["appname"]. If you
-# change parse_to, change these conditions to match -- a mismatch matches
-# nothing silently and everything falls through to the catch-all.
+# Why the conditions differ per route:
+# Every native source stamps a `log_type`, but not all in the same place.
+#   - tcp sources (winsec, panos, appjson) set it as an ATTRIBUTE
+#   - common_event_format sets it as an ATTRIBUTE
+#   - apache_common regex-parses INTO THE BODY, so its log_type is a body field
+#     and the only attribute on the record is log.file.name
+# Hence body["log_type"] for apache and attributes["log_type"] for the rest.
+# A mismatch matches nothing silently and everything lands in the catch-all --
+# check the debug destination first if a stream disappears.
 #
 # Each APPNAME is set per generator in docker-compose.blitz.yaml. OTLP could not
 # carry this distinction: blitz hardcodes service.name="blitz" on OTLP output
@@ -33,19 +32,16 @@ spec:
     - name: routes
       value:
         - condition:
-            ottl: attributes["appname"] == "winsec"
+            ottl: attributes["log_type"] == "windows_event.security"
             ui:
               operator: ""
               statements:
-                - key: appname
+                - key: log_type
                   match: attributes
                   operator: Equals
-                  value: winsec
+                  value: windows_event.security
           id: winsec
         - condition:
-            # PAN arrives over raw TCP, not syslog, so it has no appname.
-            # The tcp source stamps log_type=palo-alto instead -- the idiomatic
-            # Bindplane routing key.
             ottl: attributes["log_type"] == "palo-alto"
             ui:
               operator: ""
@@ -56,33 +52,33 @@ spec:
                   value: palo-alto
           id: paloalto
         - condition:
-            ottl: attributes["appname"] == "appjson"
+            ottl: attributes["log_type"] == "appjson"
             ui:
               operator: ""
               statements:
-                - key: appname
+                - key: log_type
                   match: attributes
                   operator: Equals
                   value: appjson
           id: appjson
         - condition:
-            ottl: attributes["appname"] == "apache"
+            ottl: attributes["log_type"] == "cef"
             ui:
               operator: ""
               statements:
-                - key: appname
-                  match: attributes
-                  operator: Equals
-                  value: apache
-          id: apache
-        - condition:
-            ottl: attributes["appname"] == "cef"
-            ui:
-              operator: ""
-              statements:
-                - key: appname
+                - key: log_type
                   match: attributes
                   operator: Equals
                   value: cef
           id: cef
+        - condition:
+            ottl: body["log_type"] == "apache_common"
+            ui:
+              operator: ""
+              statements:
+                - key: log_type
+                  match: body
+                  operator: Equals
+                  value: apache_common
+          id: apache
         - id: unmatched

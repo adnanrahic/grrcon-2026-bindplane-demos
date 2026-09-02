@@ -16,14 +16,13 @@ demonstrates fleet management, but no longer carries blitz log traffic.
   blitz-cef ─────file──────▶ bdot-cef     (grrcon-cef)     ──▶ Splunk HEC
   blitz-apache-native ─file▶ bdot-apache  (grrcon-apache)  ──▶ Elastic
 
-  GATEWAY TIER
+  GATEWAY TIER -- the ingress runs the same five native sources, and
+  forwards EVERYTHING to the pool; the workers do the fan-out.
 
-  OTLP :4317/:4318 ──▶ bdot-ingress ──▶ bdot-pool (bdot-01..10, round-robin)
-
-  bdot-ingress also MIRRORS all five native pipelines, each source routed
-  straight to its own destination (v2 advanced routing, not via the pool):
-    apache (file) ─▶ Elastic     cef (file) ─▶ Splunk HEC        [receive data]
-    panos/appjson/winsec (tcp) ─▶ Dynatrace / SecOps        [bound but idle]
+  apache (file) ┐
+  cef (file)    ├─▶ bdot-ingress ─▶ bdot-pool ─▶ router ─▶ the five backends
+  OTLP :4317/8  ┘                  (bdot-01..10)
+  panos/winsec/appjson (tcp 5141-3) also bound here, idle -- see below
 ```
 
 Nothing in `docker-compose.yaml` defines a pipeline. The collectors register,
@@ -354,13 +353,10 @@ docker exec bdot-ingress sh -c 'cat ./config.yaml' | grep -A3 otlp_grpc
 `debug/grrcon-debug-out`. Older collector builds wrote `LogsExporter`; grepping
 for that against v1.106 silently returns zero and looks exactly like an outage.
 
-## Routing (gateway tier — no longer in the log path)
+## Routing (gateway tier)
 
-> **Retired for logs.** Each stream now lands on its own edge collector, so
-> nothing needs splitting after the fact. `bindplane/router.yaml` and the worker
-> configuration still exist and still roll out; they simply carry no blitz
-> traffic. Kept because the mechanics below are worth knowing, and because the
-> gateway tier is still the fleet-management and progressive-rollout demo.
+The ingress forwards every source to `bdot-pool`, so the worker tier splits the
+merged stream back apart and fans it out to the five backends.
 
 `bindplane/router.yaml` defines a `kind: Connector` of type `routing`. The
 worker configuration sends logs into it, and it fans them out by source.
@@ -389,26 +385,28 @@ spec:
 
 Routes are **first match wins**, so the unconditioned catch-all must stay last.
 
-### `attributes["appname"]` -- and why it depends on `parse_to`
+### Every source stamps `log_type` — but not all in the same place
 
-Routes match `attributes["appname"]`. That is only correct because the ingress
-syslog source sets `parse_to: attributes` (see "Record shape" below).
+Routes match on `log_type`, the idiomatic Bindplane routing key. The catch is
+that sources put it in different places:
 
-**The source default is `parse_to: body`**, which moves the parsed RFC fields
-into the body instead:
+| Source | Where `log_type` lands | Condition |
+|---|---|---|
+| `tcp` (winsec, panos, appjson) | attribute | `attributes["log_type"] == …` |
+| `common_event_format` (cef) | attribute | `attributes["log_type"] == "cef"` |
+| `apache_common` | **body field** | `body["log_type"] == "apache_common"` |
 
-```yaml
-- from: attributes.appname
-  to:   body.appname
-  type: move
-```
-
-Under that default the condition must be `body["appname"]`. The two settings are
-coupled: change one without the other and every condition compiles fine, matches
-nothing, and dumps all traffic into the catch-all. If routing suddenly sends
-everything to debug, check `parse_to` before anything else.
+`apache_common` regex-parses into the body, so its `log_type` ends up a body
+field and the only attribute on the record is `log.file.name`. Getting this
+wrong matches nothing **silently** and dumps the stream into the catch-all — so
+if a stream disappears, check the debug destination first, then check which side
+of the record its `log_type` is on.
 
 ### Record shape: raw body, metadata in attributes
+
+> **Historical.** No syslog source remains in the demo — every stream now uses a
+> native file source or raw TCP. The `parse_to` and unwrap mechanics below are
+> kept because they apply to any Bindplane syslog source you add later.
 
 Bindplane Blueprints match the **raw log line**. Getting the record into that
 shape takes two things, and neither is the default.
@@ -470,14 +468,14 @@ Each route condition carries both:
 
 ```yaml
 - condition:
-    ottl: attributes["appname"] == "winsec"   # what the collector evaluates
+    ottl: attributes["log_type"] == "cef"     # what the collector evaluates
     ui:                                       # what the Bindplane UI renders
       operator: ""
       statements:
-        - key: appname
+        - key: log_type
           match: attributes
           operator: Equals
-          value: winsec
+          value: cef
   id: winsec
 ```
 
@@ -495,7 +493,7 @@ indistinguishable, leaving nothing to route on but body regex. Raw TCP and files
 carry the generator's line verbatim, which is why the per-pipeline split uses
 them instead.
 
-### RFC 3164, not 5424 -- this one will bite you
+### RFC 3164, not 5424 -- if you ever go back to syslog
 
 blitz formats RFC 5424 timestamps with `time.RFC3339Nano`
 (`output/syslog/syslog.go:209`) -- nine fractional digits. RFC 5424 permits at
@@ -741,8 +739,8 @@ framing needs, and there is no datagram loss.
 
 The `tcp` source stamps **`log_type: palo-alto`**, so this stream routes on
 `attributes["log_type"]` — the idiomatic Bindplane routing key, which every
-source exposes and which the account's own `gateway-router` already uses. The
-other four streams still route on `appname`.
+source exposes and which the account's own `gateway-router` already uses. All
+five streams now route on `log_type`; see "Routing" for the per-source table.
 
 ### Still not possible
 
@@ -870,5 +868,5 @@ docker compose down -v                             # agents reconnect with same 
 | `bindplane/edge-appjson.yaml` | `tcp` :5143 (JSON parsed) -> Dynatrace |
 | `bindplane/fleets.yaml` | the `grrcon` and `grrcon-ingress` fleets |
 | `bindplane/ingress.yaml` | OTLP + syslog sources, unwrap processor -> Bindplane Gateway destination |
-| `bindplane/router.yaml` | routing connector -- splits logs by `attributes["appname"]` |
+| `bindplane/router.yaml` | routing connector -- splits the pooled stream by `log_type` |
 | `bindplane/workers.yaml` | Bindplane Gateway source -> router -> five destinations |
