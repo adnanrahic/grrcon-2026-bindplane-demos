@@ -1,0 +1,54 @@
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=10.20.30.42 suser=mgarcia outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=10.20.30.55 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=192.168.1.24 suser=awilliams sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=192.168.1.90 spt=40004 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=172.16.4.11 suser=klee outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=10.20.30.41 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=10.20.30.42 suser=hokafor sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=10.20.30.55 spt=40008 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=192.168.1.24 suser=mgarcia outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=192.168.1.90 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=172.16.4.11 suser=awilliams sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=10.20.30.41 spt=40012 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=10.20.30.42 suser=klee outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=10.20.30.55 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=192.168.1.24 suser=hokafor sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=192.168.1.90 spt=40016 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=172.16.4.11 suser=mgarcia outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=10.20.30.41 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=10.20.30.42 suser=awilliams sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=10.20.30.55 spt=40020 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=192.168.1.24 suser=klee outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=192.168.1.90 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=172.16.4.11 suser=hokafor sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=10.20.30.41 spt=40024 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=10.20.30.42 suser=mgarcia outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=10.20.30.55 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=192.168.1.24 suser=awilliams sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=192.168.1.90 spt=40028 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=172.16.4.11 suser=klee outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=10.20.30.41 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=10.20.30.42 suser=hokafor sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=10.20.30.55 spt=40032 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=192.168.1.24 suser=mgarcia outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=192.168.1.90 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=172.16.4.11 suser=awilliams sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=10.20.30.41 spt=40036 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2001|Auth_Success|1|src=10.20.30.42 suser=klee outcome=success cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3001|Request_Allowed|2|src=10.20.30.55 dpt=80 request=/health act=allow cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4001|Process_Started|3|src=192.168.1.24 suser=hokafor sproc=/usr/bin/curl cat=process
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1001|Allowed_Traffic|1|src=192.168.1.90 spt=40040 dst=198.51.100.20 dpt=443 proto=TCP act=allow cat=policy
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1100|Port_Scan_Detected|5|src=203.0.113.55 dst=10.20.30.41 dpt=22 proto=TCP act=block cat=recon
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2100|Auth_Failed|5|src=203.0.113.61 suser=admin outcome=failure reason=bad_password cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3100|Rate_Limit_Triggered|4|src=203.0.113.77 dpt=443 request=/api/v1/login act=throttle cat=webrequest
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4100|Unsigned_Binary|6|src=192.168.1.24 suser=rpatel sproc=/tmp/update cat=process
+%b %d %T siem-edge-01 CEF:0|Container|Runtime|1.0|5100|Privileged_Container|6|src=10.20.30.55 cs1Label=image cs1=internal/batch:2.1 cat=container
+%b %d %T siem-edge-01 CEF:0|Secure|DataLoss|1.1|6100|Policy_Warning|4|src=192.168.1.90 suser=klee fname=quarterly.xlsx cat=dlp
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1200|Malware_Callback|8|src=10.20.30.42 dst=203.0.113.200 dpt=8080 proto=TCP cs1Label=family cs1=Trojan.Generic cat=malware
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2200|Impossible_Travel|8|src=198.51.100.77 suser=dcooper cs1Label=geo cs1=SG-then-BR cat=authentication
+%b %d %T siem-edge-01 CEF:0|Cloud|WAF|1.5|3200|SQL_Injection|7|src=203.0.113.100 dpt=80 request=/search act=block cat=webattack
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4200|Credential_Dumping|8|src=192.168.1.24 suser=SYSTEM sproc=/usr/bin/procdump cat=credaccess
+%b %d %T siem-edge-01 CEF:0|Endpoint|EDR|4.0|4300|Ransomware_Detected|10|src=192.168.1.24 suser=awilliams fname=encrypted.exe act=quarantine cat=malware
+%b %d %T siem-edge-01 CEF:0|Secure|DataLoss|1.1|6300|Bulk_Exfiltration|9|src=192.168.1.90 dst=203.0.113.50 dpt=443 fsize=524288000 fname=customers.sql cat=dlp
+%b %d %T siem-edge-01 CEF:0|Identity|IdP|1.2|2300|MFA_Bypass|9|src=192.0.2.150 suser=admin cs1Label=method cs1=compromised_mfa cat=authentication
+%b %d %T siem-edge-01 CEF:0|Network|IDS|2.0|1300|Lateral_Movement|9|src=10.20.30.41 dst=10.20.30.99 dpt=445 proto=TCP act=block cat=lateral

@@ -123,11 +123,19 @@ services:
       BLITZ_GENERATOR_JSON_WORKERS: ${JSON_WORKERS:-1}
       BLITZ_GENERATOR_JSON_RATE: ${JSON_RATE:-1s}
 
-  # 4. Universal CEF — vendor-neutral CEF:0 records (IDS, WAF, EDR, IdP,
-  #    DLP, container runtime). Bare CEF with no syslog wrapper, which is
-  #    exactly what a CEF parser wants to chew on. Small pool: 8 static
-  #    lines, no timestamp directives, so the collector stamps observed
-  #    time. Fine for parser exercise, repetitive as a volume source.
+  # 4. CEF — vendor-neutral CEF:0 records (IDS, WAF, EDR, IdP, DLP, container
+  #    runtime), replayed from samples/cef.log.
+  #
+  #    NOT package:universal-cef. Those samples are bare "CEF:0|..." lines, and
+  #    Bindplane's common_event_format source parses with a regex that REQUIRES a
+  #    "Jan 02 15:04:05 host" syslog prefix first. Against bare lines the regex
+  #    never matches, the operator chain aborts, and records arrive completely
+  #    unparsed -- silently, no error, throughput unaffected. samples/cef.log
+  #    carries the prefix, so the native parser produces device_vendor,
+  #    device_product, signature_id, severity and the extension fields.
+  #
+  #    ~74% of the 54 lines are severity 1-3 noise, so filtering and volume
+  #    reduction have something to bite on. Retune with samples/generate-cef.sh.
   blitz-cef:
     <<: *blitz-common
     container_name: blitz-cef
@@ -139,13 +147,12 @@ services:
       BLITZ_OUTPUT_FILE_WORKERS: "1"
       BLITZ_OUTPUT_FILE_ROTATION_COMPRESS: "false"
       BLITZ_GENERATOR_TYPE: filegen
-      BLITZ_GENERATOR_FILEGEN_SOURCE: "package:universal-cef"
+      BLITZ_GENERATOR_FILEGEN_SOURCE: /samples/cef.log
       BLITZ_GENERATOR_FILEGEN_WORKERS: ${CEF_WORKERS:-1}
       BLITZ_GENERATOR_FILEGEN_RATE: ${CEF_RATE:-1s}
-      BLITZ_DATA_LIBRARY_DIR: /data_library
     volumes:
       - ./logs/cef:/var/log/cef
-      - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
+      - ./samples:/samples:ro
 
   # 5. Apache access logs in NATIVE Common Log Format, written to a file.
   #

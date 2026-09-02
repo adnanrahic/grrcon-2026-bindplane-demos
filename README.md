@@ -567,7 +567,7 @@ with a native file-based source write files instead. See "Native formats" for wh
 | `blitz-winsec` | tcp | `bdot-winsec:5142` | `filegen` | `./samples/winsec.xml` | 500ms | 2 |
 | `blitz-palo-alto` | tcp | `bdot-panos:5141` | `filegen` | `package:palo-alto/csv` | 500ms | 2 |
 | `blitz-json` | tcp | `bdot-appjson:5143` | `json` | `default`, synthesized | 1s | 1 |
-| `blitz-cef` | file | `/var/log/cef/events.log` | `filegen` | `package:universal-cef` | 1s | 1 |
+| `blitz-cef` | file | `/var/log/cef/events.log` | `filegen` | `./samples/cef.log` | 1s | 1 |
 | `blitz-apache-native` | file | `/var/log/apache2/access.log` | `apache-common` | generated | 1s | 1 |
 
 
@@ -622,16 +622,42 @@ No blueprint covers this shape, which is what gives Pipeline Intelligence a real
 job. The generator also supports a `pii` type
 (`BLITZ_GENERATOR_JSON_TYPE: pii`) if you want a redaction story instead.
 
-### 4. Universal CEF -- `blitz-cef`
+### 4. CEF -- `blitz-cef`
 
-Bare `CEF:0` records with no syslog wrapper -- what a CEF parser wants to chew
-on. Eight static lines spanning eight vendor/product pairs:
+Vendor-neutral `CEF:0` records replayed from `samples/cef.log`, written to
+`/var/log/cef/events.log` and tailed by the native `common_event_format` source.
 
-`Network|IDS`, `Cloud|WAF`, `Endpoint|EDR`, `Identity|IdP`,
-`Secure|DataLoss`, `Container|Runtime`, `Acme|WebApp`, `Enterprise|SIEM`
+**Not `package:universal-cef`.** Those samples are bare `CEF:0|...` lines, and
+the Bindplane CEF source parses with a regex that requires a syslog prefix:
 
-Eight lines with no timestamp directives, so the collector stamps observed time.
-Fine for exercising a parser, repetitive as a volume source.
+```
+^(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+((?P<hostname>[^\s]+)\s+)?(?P<cef_headers>[\d\D]+)
+```
+
+Against bare lines that never matches, the operator chain aborts, and records
+arrive **completely unparsed -- silently**. No error is logged and throughput
+looks healthy; the only symptoms are a string body and a 1970 timestamp.
+
+`samples/cef.log` carries the prefix, so the native parser produces:
+
+```
+Timestamp: 2026-09-02 13:49:15          (parsed, not 1970)
+SeverityText: 1   SeverityNumber: Info(9)
+Attributes: device_vendor=Identity  device_product=IdP  device_version=1.2
+            signature_id=2001  name=Auth_Success  severity=1
+            hostname=siem-edge-01  extensions="src=... suser=... cat=..."
+```
+
+Use `%d` (zero-padded day), not `%e` (space-padded): the plugin's layout is
+gotime `Jan 02 15:04:05`, and `Sep  2` will not match a `02` layout.
+
+54 lines, ~74% severity 1-3 noise, so filtering and volume reduction have
+something to bite on. Retune with `samples/generate-cef.sh`.
+
+**No CEF blueprint exists** -- none of the 33 targets CEF. `extensions` also
+arrives as one unsplit key=value string; splitting it needs a downstream parser
+(`parse-regex-bundle` is the closest shipped option).
+
 
 ### 5. Apache web-server logs -- `blitz-apache`
 
