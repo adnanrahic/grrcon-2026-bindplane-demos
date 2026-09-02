@@ -135,8 +135,9 @@ only**; the ingress has no SecOps exporter and does not get it.
 mkdir -p logs/apache2 logs/cef && chmod 777 logs/apache2 logs/cef
 ```
 
-`logs/apache2` is mounted at **`/var/log/apache2`** inside the containers —
-the default path for the Apache source and for the
+`logs/apache2` and `logs/cef` are mounted at **`/var/log/apache2`** and
+**`/var/log/cef`** inside the containers. `/var/log/apache2/access.log` is the
+default path for the Apache source and for the
 `elasticsearch-apache-common-full-pipeline` blueprint, so the blueprint works
 without repointing it. Only that subdirectory is mounted: the collector image
 has real content in `/var/log` (apt, dpkg) that a mount over the whole directory
@@ -566,7 +567,7 @@ with a native file-based source write files instead. See "Native formats" for wh
 | `blitz-winsec` | tcp | `bdot-winsec:5142` | `filegen` | `./samples/winsec.xml` | 500ms | 2 |
 | `blitz-palo-alto` | tcp | `bdot-panos:5141` | `filegen` | `package:palo-alto/csv` | 500ms | 2 |
 | `blitz-json` | tcp | `bdot-appjson:5143` | `json` | `default`, synthesized | 1s | 1 |
-| `blitz-cef` | file | `/logs/cef/events.log` | `filegen` | `package:universal-cef` | 1s | 1 |
+| `blitz-cef` | file | `/var/log/cef/events.log` | `filegen` | `package:universal-cef` | 1s | 1 |
 | `blitz-apache-native` | file | `/var/log/apache2/access.log` | `apache-common` | generated | 1s | 1 |
 
 

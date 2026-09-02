@@ -1,5 +1,9 @@
 # CEF -> Splunk HEC.
 #
+# Written to /var/log/cef/events.log for symmetry with the Apache pipeline.
+# common_event_format has no default path of its own, so this is convention
+# rather than a blueprint requirement.
+#
 # CEF has a native Bindplane source (common_event_format), and like every
 # format-specific source it is file-based -- so blitz writes the file and this
 # collector tails it. Same shape as the Apache pipeline.
@@ -12,7 +16,7 @@ spec:
   parameters:
     - name: file_log_path
       value:
-        - /logs/cef/events.log
+        - /var/log/cef/events.log
     - name: log_type
       value: cef
     - name: start_at

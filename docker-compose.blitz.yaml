@@ -135,7 +135,7 @@ services:
     environment:
       BLITZ_LOGGING_LEVEL: ${BLITZ_LOG_LEVEL:-info}
       BLITZ_OUTPUT_TYPE: file
-      BLITZ_OUTPUT_FILE_PATH: /logs/cef/events.log
+      BLITZ_OUTPUT_FILE_PATH: /var/log/cef/events.log
       BLITZ_OUTPUT_FILE_WORKERS: "1"
       BLITZ_OUTPUT_FILE_ROTATION_COMPRESS: "false"
       BLITZ_GENERATOR_TYPE: filegen
@@ -144,7 +144,7 @@ services:
       BLITZ_GENERATOR_FILEGEN_RATE: ${CEF_RATE:-1s}
       BLITZ_DATA_LIBRARY_DIR: /data_library
     volumes:
-      - ./logs:/logs
+      - ./logs/cef:/var/log/cef
       - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
 
   # 5. Apache access logs in NATIVE Common Log Format, written to a file.
