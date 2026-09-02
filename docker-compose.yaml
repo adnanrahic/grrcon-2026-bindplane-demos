@@ -39,7 +39,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T00
       OPAMP_AGENT_NAME: bdot-ingress
-      OPAMP_LABELS: fleet=grrcon-ingress,role=ingress,configuration=grrcon-ingress
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
     ports:
       - "13133:13133" # health check
     volumes:
@@ -60,7 +60,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T01
       OPAMP_AGENT_NAME: bdot-01
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=canary,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=canary,configuration=grrcon-gateway
     volumes:
       - bdot-01-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -77,7 +77,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T02
       OPAMP_AGENT_NAME: bdot-02
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=canary,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=canary,configuration=grrcon-gateway
     volumes:
       - bdot-02-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -94,7 +94,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T03
       OPAMP_AGENT_NAME: bdot-03
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=prod,configuration=grrcon-gateway
     volumes:
       - bdot-03-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -111,7 +111,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T04
       OPAMP_AGENT_NAME: bdot-04
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=prod,configuration=grrcon-gateway
     volumes:
       - bdot-04-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -128,7 +128,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T05
       OPAMP_AGENT_NAME: bdot-05
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=prod,configuration=grrcon-gateway
     volumes:
       - bdot-05-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -145,7 +145,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T06
       OPAMP_AGENT_NAME: bdot-06
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=prod,configuration=grrcon-gateway
     volumes:
       - bdot-06-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -162,7 +162,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T07
       OPAMP_AGENT_NAME: bdot-07
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=prod,configuration=grrcon-gateway
     volumes:
       - bdot-07-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -179,7 +179,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T08
       OPAMP_AGENT_NAME: bdot-08
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=prod,configuration=grrcon-gateway
     volumes:
       - bdot-08-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -196,7 +196,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T09
       OPAMP_AGENT_NAME: bdot-09
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=prod,configuration=grrcon-gateway
     volumes:
       - bdot-09-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -213,7 +213,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T10
       OPAMP_AGENT_NAME: bdot-10
-      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+      OPAMP_LABELS: fleet=grrcon-gateway,role=gateway,env=prod,configuration=grrcon-gateway
     volumes:
       - bdot-10-storage:/etc/otel/storage
       - ./credentials.json:/opt/credentials.json:ro
@@ -234,7 +234,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T11
       OPAMP_AGENT_NAME: bdot-apache
-      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-apache
+      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-apache
     volumes:
       - bdot-apache-storage:/etc/otel/storage
       - ./logs/apache2:/var/log/apache2:ro
@@ -249,7 +249,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T12
       OPAMP_AGENT_NAME: bdot-cef
-      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-cef
+      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-cef
     volumes:
       - bdot-cef-storage:/etc/otel/storage
       - ./logs/cef:/var/log/cef:ro
@@ -264,7 +264,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T13
       OPAMP_AGENT_NAME: bdot-panos
-      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-panos
+      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-panos
     ports:
       - "5141:5141"
     volumes:
@@ -280,7 +280,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T14
       OPAMP_AGENT_NAME: bdot-winsec
-      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-winsec
+      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-winsec
     ports:
       - "5142:5142"
     volumes:
@@ -297,7 +297,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T15
       OPAMP_AGENT_NAME: bdot-appjson
-      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-appjson
+      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-appjson
     ports:
       - "5143:5143"
     volumes:

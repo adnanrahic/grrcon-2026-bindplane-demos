@@ -8,7 +8,7 @@
 apiVersion: bindplane.observiq.com/v1
 kind: Fleet
 metadata:
-  name: grrcon
+  name: grrcon-gateway
   labels:
     platform: linux
     agent-type: observiq-otel-collector
@@ -16,26 +16,11 @@ spec:
   configuration: ""
   selector:
     matchLabels:
-      fleet: grrcon
+      fleet: grrcon-gateway
 ---
 # The ingress sits alone here so it can be operated -- upgraded, restarted,
 # rolled -- without touching the worker pool, and so fleet-wide actions aimed
 # at the workers can never reach the front door.
-apiVersion: bindplane.observiq.com/v1
-kind: Fleet
-metadata:
-  name: grrcon-ingress
-  labels:
-    platform: linux
-    agent-type: observiq-otel-collector
-spec:
-  configuration: ""
-  selector:
-    matchLabels:
-      fleet: grrcon-ingress
----
-# The edge tier: one collector per source+destination pipeline. Each has its
-# own configuration, so each can carry a full_pipeline_blueprint for its pair.
 apiVersion: bindplane.observiq.com/v1
 kind: Fleet
 metadata:
@@ -48,3 +33,18 @@ spec:
   selector:
     matchLabels:
       fleet: grrcon-edge
+---
+# The edge tier: one collector per source+destination pipeline. Each has its
+# own configuration, so each can carry a full_pipeline_blueprint for its pair.
+apiVersion: bindplane.observiq.com/v1
+kind: Fleet
+metadata:
+  name: grrcon-sources
+  labels:
+    platform: linux
+    agent-type: observiq-otel-collector
+spec:
+  configuration: ""
+  selector:
+    matchLabels:
+      fleet: grrcon-sources

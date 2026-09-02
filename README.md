@@ -2,9 +2,13 @@
 
 Sixteen BDOT collectors in Docker, all managed from Bindplane Cloud over OpAMP.
 
-Five **edge collectors**, one per source+destination pipeline, each with its own
-Bindplane configuration. Alongside them a **gateway tier** -- one ingress and ten
-workers behind a load-balanced alias -- which still registers and still
+Three tiers, each its own fleet:
+
+- **`grrcon-sources`** -- five collectors, one per source+destination pipeline,
+  each with its own configuration, shipping straight to a backend.
+- **`grrcon-edge`** -- `bdot-ingress`, running the same five native sources but
+  forwarding to the gateway pool. Simulates an edge collector.
+- **`grrcon-gateway`** -- ten collectors behind a load-balanced alias -- which still registers and still
 demonstrates fleet management, but no longer carries blitz log traffic.
 
 ```
@@ -17,7 +21,7 @@ demonstrates fleet management, but no longer carries blitz log traffic.
   blitz-apache-native ─file▶ bdot-apache  (grrcon-apache)  ──▶ Elastic
 
   GATEWAY TIER -- the ingress runs the same five native sources, and
-  forwards EVERYTHING to the pool; the workers do the fan-out.
+  forwards EVERYTHING to the pool; the gateway tier does the fan-out.
 
   apache (file) ┐
   cef (file)    │
@@ -43,7 +47,7 @@ blueprint without disturbing the others.
 
 ## Why it is shaped this way
 
-**`bdot-pool` is a shared Docker network alias**, declared by all ten workers.
+**`bdot-pool` is a shared Docker network alias**, declared by all ten gateway collectors.
 Docker's embedded DNS returns all ten container IPs for that one name, so the
 ingress destination targets a single hostname with gRPC load balancing enabled.
 Add or remove workers and the Bindplane config never changes.
@@ -64,9 +68,9 @@ gateway source.
 
 **The ingress lives in its own fleet.** A collector can belong to exactly one
 fleet at a time, so `fleet=` is the one mutually exclusive label here: the
-ingress is `fleet=grrcon-ingress`, the ten workers are `fleet=grrcon`. The front
+ingress is `fleet=grrcon-edge`, the ten gateways are `fleet=grrcon-gateway`. The front
 door can be upgraded, restarted, or rolled without touching the pool, and a
-fleet-wide action aimed at the workers can never reach it.
+fleet-wide action aimed at the gateway tier can never reach it.
 
 **The ingress is not labeled `env=`.** `bdot-winsec` is the only edge collector
 that needs `credentials.json` -- it is the one exporting to Google SecOps, and
@@ -124,7 +128,7 @@ working exporter that cannot reach its backend.
 
 `credentials.json` is gitignored. Never commit it, dummy or not.
 
-Compose mounts it read-only at `/opt/credentials.json` on the **ten workers
+Compose mounts it read-only at `/opt/credentials.json` on the **ten gateway collectors
 only**; the ingress has no SecOps exporter and does not get it.
 
 ### 3. Shared log directory
@@ -165,8 +169,8 @@ OpAMP; the API key authenticates the *CLI* against the management API.
 ```bash
 bindplane apply -f bindplane/     # MUST come first
 docker compose up -d
-bindplane rollout start grrcon-workers
-bindplane rollout start grrcon-ingress
+bindplane rollout start grrcon-gateway
+bindplane rollout start grrcon-edge
 ```
 
 **The order is not cosmetic.** A collector's `configuration=` label binds only
@@ -180,7 +184,7 @@ to the same value fixes it. See "Recovering an unbound collector" below.
 rollout is what pushes them to collectors. A freshly applied configuration sits
 at `pendingVersion` with agents still on the old pipeline until you roll it out.
 
-Roll the workers before the ingress so the pool is listening on 4317 before the
+Roll the gateway tier before the edge collector so the pool is listening on 4317 before the
 front door starts forwarding. Out of order it still converges -- the exporter
 retries -- but you will see a burst of `connection refused` in the ingress log.
 
@@ -201,7 +205,7 @@ Each source stamps its own `log_type`, so there is no routing connector and no
 
 ### The ingress mirrors all five
 
-`grrcon-ingress` references the same five Source resources and routes each one
+`grrcon-edge` references the same five Source resources and routes each one
 directly to its own destination, so the same pipelines exist in two places. Only
 the file-based ones actually dual-ingest:
 
@@ -240,7 +244,7 @@ without it.
 `Google-SecOps-Linux`, `Elastic` and `Dynatrace` are pre-existing resources in
 the Bindplane account, referenced by name rather than redefined so they keep
 their real credentials. `bindplane apply` against a **fresh** account needs those
-three created first. `Splunk-HEC` is defined in `bindplane/workers.yaml`.
+three created first. `Splunk-HEC` is defined in `bindplane/gateway.yaml`.
 
 ### Known state of each backend
 
@@ -251,7 +255,7 @@ not promise the room that data lands anywhere.
 - **Google SecOps** -- dummy credentials by design. Loads, fails at the network,
   logs nothing noisy.
 - **Splunk HEC** -- placeholder token and `REPLACE_ME.splunkcloud.com` hostname.
-  Replace both in `bindplane/workers.yaml` to make it real.
+  Replace both in `bindplane/gateway.yaml` to make it real.
 - **Elastic** -- real endpoint, returns **HTTP 404**. Tenant is stale or the
   OTLP path has changed.
 - **Dynatrace** -- real endpoint, returns **HTTP 404**. Same.
@@ -302,7 +306,7 @@ config defined in `bindplane/*.yaml` you have a stronger safety net: delete and
 re-apply rebuilds it from source. Test on a copy first if you prefer:
 
 ```bash
-bindplane copy configuration grrcon-ingress grrcon-v2-probe
+bindplane copy configuration grrcon-edge grrcon-v2-probe
 # ...upgrade and inspect the probe...
 bindplane delete configuration grrcon-v2-probe --force
 ```
@@ -311,9 +315,9 @@ bindplane delete configuration grrcon-v2-probe --force
 
 ```bash
 docker compose ps                                     # 11 up
-bindplane get fleets                                  # grrcon + grrcon-ingress
-bindplane get agents --selector fleet=grrcon          # 10 workers
-bindplane get agents --selector fleet=grrcon-ingress  # 1 ingress
+bindplane get fleets                                  # grrcon + grrcon-edge
+bindplane get agents --selector fleet=grrcon-gateway  # 10 gateways
+bindplane get agents --selector fleet=grrcon-edge  # 1 edge
 curl -s localhost:13133                               # ingress health
 ```
 
@@ -324,7 +328,7 @@ Confirm every collector actually bound to a configuration; a `-` in the
 `CONFIGURATION` column means it did not:
 
 ```bash
-bindplane get agents --selector fleet=grrcon | awk '{print $2, $6}'
+bindplane get agents --selector fleet=grrcon-gateway | awk '{print $2, $6}'
 ```
 
 Push real telemetry through the front door:
@@ -360,11 +364,11 @@ bindplane get agents --selector fleet=grrcon-edge
 
 ### Is the gateway tier still healthy?
 
-It carries no blitz logs any more, so the workers should be quiet — that is
+It carries no blitz logs any more, so the gateway tier should be quiet — that is
 expected, not a fault:
 
 ```bash
-bindplane get agents --selector fleet=grrcon    # 10, all Connected
+bindplane get agents --selector fleet=grrcon-gateway    # 10, all Connected
 ```
 
 ### Is the pool balanced?### Is the pool balanced? Expect a spread rather than an even split:
@@ -388,7 +392,7 @@ for that against v1.106 silently returns zero and looks exactly like an outage.
 The ingress forwards every source to `bdot-pool`, so the worker tier splits the
 merged stream back apart and fans it out to the five backends.
 
-`bindplane/router.yaml` defines a `kind: Connector` of type `routing`. The
+`bindplane/connector-router.yaml` defines a `kind: Connector` of type `routing`. The
 worker configuration sends logs into it, and it fans them out by source.
 
 ### Wiring, in three places
@@ -542,7 +546,7 @@ RFC 3164 uses `Jan _2 15:04:05` with no fractional seconds, so it parses
 cleanly. Both sides must agree:
 
 - `docker-compose.blitz.yaml`: `BLITZ_OUTPUT_SYSLOG_RFC: "3164"`
-- `bindplane/ingress.yaml`: `protocol: rfc3164`
+- `bindplane/edge.yaml`: `protocol: rfc3164`
 
 Cost: no sub-second precision in the syslog *header*. Message bodies keep their
 own timestamps, so PAN-OS and the JSON stream are unaffected.
@@ -552,7 +556,7 @@ own timestamps, so PAN-OS and the JSON stream are unaffected.
 A Connector and a Configuration that references it **cannot live in the same
 file** -- apply renders the config before committing the connector and fails
 with `unknown Connector: grrcon-router:1`. Separate files are fine, as long as
-the connector's filename sorts first. `router.yaml` before `workers.yaml` works;
+the connector's filename sorts first. `connector-router.yaml` before `gateway.yaml` works;
 renaming either could break `bindplane apply -f bindplane/`.
 
 ## What blitz generates
@@ -816,25 +820,55 @@ and then captured back with `bindplane get processors --export`.
 
 ## Progressive rollout demo
 
-```bash
-bindplane rollout start grrcon-workers --initial 2 --multiplier 2 --max-errors 0
-bindplane rollout status grrcon-workers
-bindplane rollout pause grrcon-workers     # show the brakes mid-flight
+`grrcon-gateway` carries progressive rollout options on the **configuration
+resource**, so every rollout of it stages by label however it is triggered:
+
+```yaml
+spec:
+  rollout:
+    type: progressive
+    parameters:
+      - name: stages
+        value:
+          - {name: Canary, labels: {env: canary}}   # bdot-01, bdot-02
+          - {name: Prod,   labels: {env: prod}}     # bdot-03..10
+      - name: maxErrors
+        value: 0
+      - name: phaseAgentCount
+        value: {type: adaptive, initial: 0, multiplier: 0, maximum: 0}
 ```
 
-**Rollout batching is count-based, not label-based.** `--initial`,
-`--multiplier`, and `--max` control how many collectors move per phase; there is
-no CLI flag that targets `env=canary` first. The `env=` labels are for
-*selecting and verifying* subsets, and for the UI's rollout options:
+**This is label-based staging, which `bindplane rollout start` cannot express** —
+its flags (`--initial`/`--multiplier`/`--max`) only phase by *count*. Earlier
+versions of this README claimed label staging was impossible; that was wrong. It
+lives on the configuration, not on the command.
+
+`phaseAgentCount: adaptive` lets the server size each phase from the collector
+count; `initial`/`multiplier`/`maximum` are ignored in that mode.
+
+Running it:
 
 ```bash
-bindplane get agents --selector env=canary   # did the first phase land here?
+bindplane rollout start  grrcon-gateway    # stage 1: env=canary only
+bindplane rollout status grrcon-gateway    # STAGE column shows "Canary"
+bindplane get agents --selector env=canary # confirm only these two moved
+bindplane rollout resume grrcon-gateway    # advance to stage 2: env=prod
 ```
 
-`--max-errors 0` is the part worth demoing. A configuration that fails to start
-halts the rollout on the first collector instead of taking the fleet down --
-observed behavior, not theory: a bad SecOps credentials path stopped a rollout at
-one collector while the other nine stayed up on the previous version.
+**It pauses between stages** — after Canary completes, status goes `Pending` and
+waits for `resume`. Observed mid-rollout, which is the moment worth showing:
+
+```
+bdot-01  canary  grrcon-gateway:31     <- new version
+bdot-02  canary  grrcon-gateway:31
+bdot-03  prod    grrcon-gateway:30     <- held back
+...
+bdot-10  prod    grrcon-gateway:29
+```
+
+`maxErrors: 0` halts the rollout on the first collector that fails to start —
+observed for real earlier in this project, when a bad SecOps credentials path
+stopped a rollout at one collector while the other nine stayed up.
 
 ## Recovering an unbound collector
 
@@ -843,9 +877,9 @@ clearly include `configuration=<name>`, the binding never fired. Force it by
 toggling the label to a throwaway value and back:
 
 ```bash
-bindplane label agent --selector fleet=grrcon configuration=none --overwrite
+bindplane label agent --selector fleet=grrcon-gateway configuration=none --overwrite
 sleep 5
-bindplane label agent --selector fleet=grrcon configuration=grrcon-workers --overwrite
+bindplane label agent --selector fleet=grrcon-gateway configuration=grrcon-gateway --overwrite
 ```
 
 Applying the configurations before `docker compose up -d` avoids this entirely.
@@ -861,8 +895,8 @@ Rebuild from source and roll out:
 
 ```bash
 bindplane apply -f bindplane/
-bindplane rollout start grrcon-workers
-bindplane rollout start grrcon-ingress
+bindplane rollout start grrcon-gateway
+bindplane rollout start grrcon-edge
 ```
 
 Content comes back identical because `bindplane/*.yaml` is the source of truth.
@@ -897,7 +931,7 @@ new labels -- no orphaned collector left in the UI. Alternatively, relabel
 server-side without touching the container:
 
 ```bash
-bindplane label agent 01K5GRRC0N0000000000BD0T00 fleet=grrcon-ingress --overwrite
+bindplane label agent 01K5GRRC0N0000000000BD0T00 fleet=grrcon-edge --overwrite
 ```
 
 ## Reset
@@ -917,12 +951,12 @@ docker compose down -v                             # agents reconnect with same 
 | `.env.example` | template |
 | `credentials.json` | dummy SecOps service account -- gitignored, generate per step 2 |
 | `logs/apache2/`, `logs/cef/` | native-format files written by blitz, tailed by the collectors -- gitignored |
-| `bindplane/edge-apache.yaml` | `apache_common` (file) -> Elastic |
-| `bindplane/edge-cef.yaml` | `common_event_format` (file) -> Splunk HEC |
-| `bindplane/edge-panos.yaml` | `tcp` :5141 -> Dynatrace |
-| `bindplane/edge-winsec.yaml` | `tcp` :5142 -> Google SecOps |
-| `bindplane/edge-appjson.yaml` | `tcp` :5143 (JSON parsed) -> Dynatrace |
-| `bindplane/fleets.yaml` | the `grrcon` and `grrcon-ingress` fleets |
-| `bindplane/ingress.yaml` | OTLP + syslog sources, unwrap processor -> Bindplane Gateway destination |
-| `bindplane/router.yaml` | routing connector -- splits the pooled stream by `log_type` |
-| `bindplane/workers.yaml` | Bindplane Gateway source -> router -> five destinations |
+| `bindplane/source-apache.yaml` | `apache_common` (file) -> Elastic |
+| `bindplane/source-cef.yaml` | `common_event_format` (file) -> Splunk HEC |
+| `bindplane/source-panos.yaml` | `tcp` :5141 -> Dynatrace |
+| `bindplane/source-winsec.yaml` | `tcp` :5142 -> Google SecOps |
+| `bindplane/source-appjson.yaml` | `tcp` :5143 (JSON parsed) -> Dynatrace |
+| `bindplane/fleets.yaml` | the `grrcon-gateway`, `grrcon-edge` and `grrcon-sources` fleets |
+| `bindplane/edge.yaml` | `grrcon-edge` -- the five native sources -> gateway pool |
+| `bindplane/connector-router.yaml` | routing connector -- splits the pooled stream by `log_type`. Named `connector-` so it sorts before `gateway.yaml`: a connector must be applied before the config referencing it |
+| `bindplane/gateway.yaml` | `grrcon-gateway` -- gateway source -> router -> five destinations, progressive rollout |
