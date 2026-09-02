@@ -27,31 +27,199 @@ networks:
     name: bdot-net
 
 services:
+  # ---------------------------------------------------------------------------
+  # EDGE TIER -- ten collectors simulating edge hosts. All run the SAME
+  # configuration (grrcon-edge): two file-tailing sources plus three tcp
+  # listeners, everything forwarded to the gateway pool.
+  #
+  # They share the `bdot-edge-pool` network alias so the blitz *-gw generators
+  # can address the tier by one name. No published ports: 5141-5143 belong to
+  # the source tier on the host, and ten collectors cannot each publish 13133.
+  #
+  # NOTE: all ten tail the SAME two files, so the apache and cef streams are
+  # ingested ten times over. That is inherent to running one file-tailing
+  # configuration on ten collectors -- see the README.
+  # ---------------------------------------------------------------------------
 
-  # The only collector reachable from the host. Deliberately labeled
-  # role=ingress and NOT env=canary/env=prod, so a staged worker rollout
-  # targeting env= can never take the front door down with it.
-  bdot-ingress:
+  bdot-edge-01:
     <<: *bdot
-    container_name: bdot-ingress
-    hostname: bdot-ingress
+    container_name: bdot-edge-01
+    hostname: bdot-edge-01
     environment:
       <<: *bdot-env
-      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T00
-      OPAMP_AGENT_NAME: bdot-ingress
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE01
+      OPAMP_AGENT_NAME: bdot-edge-01
       OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
-    ports:
-      - "13133:13133" # health check
     volumes:
-      - bdot-ingress-storage:/etc/otel/storage
-      # The ingress ingests the native file streams itself, tailing the same
-      # files as bdot-apache/bdot-cef. No credentials mount: everything leaves
-      # via the worker pool, so the ingress has no SecOps exporter of its own.
+      - bdot-edge-01-storage:/etc/otel/storage
       - ./logs/apache2:/var/log/apache2:ro
       - ./logs/cef:/var/log/cef:ro
     networks:
-      - bdot-net
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
 
+  bdot-edge-02:
+    <<: *bdot
+    container_name: bdot-edge-02
+    hostname: bdot-edge-02
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE02
+      OPAMP_AGENT_NAME: bdot-edge-02
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
+    volumes:
+      - bdot-edge-02-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/var/log/cef:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
+
+  bdot-edge-03:
+    <<: *bdot
+    container_name: bdot-edge-03
+    hostname: bdot-edge-03
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE03
+      OPAMP_AGENT_NAME: bdot-edge-03
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
+    volumes:
+      - bdot-edge-03-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/var/log/cef:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
+
+  bdot-edge-04:
+    <<: *bdot
+    container_name: bdot-edge-04
+    hostname: bdot-edge-04
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE04
+      OPAMP_AGENT_NAME: bdot-edge-04
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
+    volumes:
+      - bdot-edge-04-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/var/log/cef:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
+
+  bdot-edge-05:
+    <<: *bdot
+    container_name: bdot-edge-05
+    hostname: bdot-edge-05
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE05
+      OPAMP_AGENT_NAME: bdot-edge-05
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
+    volumes:
+      - bdot-edge-05-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/var/log/cef:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
+
+  bdot-edge-06:
+    <<: *bdot
+    container_name: bdot-edge-06
+    hostname: bdot-edge-06
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE06
+      OPAMP_AGENT_NAME: bdot-edge-06
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
+    volumes:
+      - bdot-edge-06-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/var/log/cef:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
+
+  bdot-edge-07:
+    <<: *bdot
+    container_name: bdot-edge-07
+    hostname: bdot-edge-07
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE07
+      OPAMP_AGENT_NAME: bdot-edge-07
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
+    volumes:
+      - bdot-edge-07-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/var/log/cef:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
+
+  bdot-edge-08:
+    <<: *bdot
+    container_name: bdot-edge-08
+    hostname: bdot-edge-08
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE08
+      OPAMP_AGENT_NAME: bdot-edge-08
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
+    volumes:
+      - bdot-edge-08-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/var/log/cef:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
+
+  bdot-edge-09:
+    <<: *bdot
+    container_name: bdot-edge-09
+    hostname: bdot-edge-09
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE09
+      OPAMP_AGENT_NAME: bdot-edge-09
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
+    volumes:
+      - bdot-edge-09-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/var/log/cef:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
+
+  bdot-edge-10:
+    <<: *bdot
+    container_name: bdot-edge-10
+    hostname: bdot-edge-10
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000EDGE10
+      OPAMP_AGENT_NAME: bdot-edge-10
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-edge
+    volumes:
+      - bdot-edge-10-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/var/log/cef:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-edge-pool
   bdot-01:
     <<: *bdot
     container_name: bdot-01
@@ -306,7 +474,16 @@ services:
       - bdot-net
 
 volumes:
-  bdot-ingress-storage:
+  bdot-edge-01-storage:
+  bdot-edge-02-storage:
+  bdot-edge-03-storage:
+  bdot-edge-04-storage:
+  bdot-edge-05-storage:
+  bdot-edge-06-storage:
+  bdot-edge-07-storage:
+  bdot-edge-08-storage:
+  bdot-edge-09-storage:
+  bdot-edge-10-storage:
   bdot-apache-storage:
   bdot-cef-storage:
   bdot-panos-storage:

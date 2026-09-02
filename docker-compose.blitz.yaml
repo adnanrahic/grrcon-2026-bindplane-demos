@@ -210,7 +210,7 @@ services:
     container_name: blitz-winsec-gw
     environment:
       <<: *blitz-tcp-env
-      BLITZ_OUTPUT_TCP_HOST: bdot-ingress
+      BLITZ_OUTPUT_TCP_HOST: bdot-edge-pool
       BLITZ_OUTPUT_TCP_PORT: "5142"
       BLITZ_GENERATOR_TYPE: filegen
       BLITZ_GENERATOR_FILEGEN_SOURCE: /samples/winsec.xml
@@ -224,7 +224,7 @@ services:
     container_name: blitz-palo-alto-gw
     environment:
       <<: *blitz-tcp-env
-      BLITZ_OUTPUT_TCP_HOST: bdot-ingress
+      BLITZ_OUTPUT_TCP_HOST: bdot-edge-pool
       BLITZ_OUTPUT_TCP_PORT: "5141"
       BLITZ_GENERATOR_TYPE: filegen
       BLITZ_GENERATOR_FILEGEN_SOURCE: "package:palo-alto/csv"
@@ -239,7 +239,7 @@ services:
     container_name: blitz-json-gw
     environment:
       <<: *blitz-tcp-env
-      BLITZ_OUTPUT_TCP_HOST: bdot-ingress
+      BLITZ_OUTPUT_TCP_HOST: bdot-edge-pool
       BLITZ_OUTPUT_TCP_PORT: "5143"
       BLITZ_GENERATOR_TYPE: json
       BLITZ_GENERATOR_JSON_TYPE: default

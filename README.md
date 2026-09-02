@@ -1,13 +1,14 @@
 # GrrCON demo: Bindplane-managed gateway topology
 
-Sixteen BDOT collectors in Docker, all managed from Bindplane Cloud over OpAMP.
+Twenty-five BDOT collectors in Docker, all managed from Bindplane Cloud over OpAMP.
 
 Three tiers, each its own fleet:
 
 - **`grrcon-sources`** -- five collectors, one per source+destination pipeline,
   each with its own configuration, shipping straight to a backend.
-- **`grrcon-edge`** -- `bdot-ingress`, running the same five native sources but
-  forwarding to the gateway pool. Simulates an edge collector.
+- **`grrcon-edge`** -- ten collectors (`bdot-edge-01..10`) all running the same
+  configuration: the five native sources, forwarding to the gateway pool.
+  Simulates a fleet of edge hosts.
 - **`grrcon-gateway`** -- ten collectors behind a load-balanced alias -- which still registers and still
 demonstrates fleet management, but no longer carries blitz log traffic.
 
@@ -24,9 +25,9 @@ demonstrates fleet management, but no longer carries blitz log traffic.
   forwards EVERYTHING to the pool; the gateway tier does the fan-out.
 
   apache (file) ┐
-  cef (file)    │
-  panos  :5141  ├─▶ bdot-ingress ─▶ bdot-pool ─▶ router ─▶ the five backends
-  winsec :5142  │                  (bdot-01..10)
+  cef (file)    │   bdot-edge-01..10
+  panos  :5141  ├─▶ (alias bdot-edge-pool) ─▶ bdot-pool ─▶ router ─▶ backends
+  winsec :5142  │                            (bdot-01..10)
   appjson:5143  ┘
 ```
 
@@ -216,6 +217,26 @@ the file-based ones actually dual-ingest:
 | `grrcon-panos-in` (tcp) | **receives** — via `blitz-palo-alto-gw` |
 | `grrcon-winsec-in` (tcp) | **receives** — via `blitz-winsec-gw` |
 | `grrcon-appjson-in` (tcp) | **receives** — via `blitz-json-gw` |
+
+### Ten edge collectors tail the same files
+
+All ten run one configuration, and two of its sources tail files — so
+`/var/log/apache2/access.log` and `/var/log/cef/events.log` are each read **ten
+times over**. Measured: Elastic traffic through the gateway went from ~89 to
+~779 per 90s when the tier went from one collector to ten.
+
+That is inherent to running a file-tailing configuration on a fleet. It is
+realistic in the sense that ten real edge hosts would each have their own local
+log — but here they share one file, so it is pure amplification rather than ten
+distinct hosts' worth of data.
+
+If you want the volume without the duplication, give each collector its own file
+(one blitz `file` output per collector) or move the file sources onto a
+single-collector configuration and leave the tcp sources on the fleet.
+
+The three tcp sources do not amplify: blitz opens one connection to the
+`bdot-edge-pool` alias, so each tcp stream lands on whichever collector Docker
+resolves — one of the ten, not all ten.
 
 ### Duplicate generators
 
