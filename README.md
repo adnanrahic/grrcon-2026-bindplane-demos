@@ -20,7 +20,7 @@ to its own backend.
   +---------------------------------------------------------------+
               fleet=grrcon, role=worker, alias bdot-pool
           |
-          v  routing connector, matching body["appname"]
+          v  routing connector, matching attributes["appname"]
   +--------------+------------+---------+-------------+-----------+
   | winsec       | paloalto   | appjson | apache      | cef       |
   | Google SecOps| Dynatrace  |Dynatrace| Elastic     | Splunk HEC|
@@ -343,11 +343,13 @@ spec:
 
 Routes are **first match wins**, so the unconditioned catch-all must stay last.
 
-### `body["appname"]`, not `attributes["appname"]`
+### `attributes["appname"]` -- and why it depends on `parse_to`
 
-This is the single most important detail, and it is invisible until you look at
-the rendered receiver config. Bindplane's syslog source parses the RFC fields
-into attributes and then **moves them into the body**:
+Routes match `attributes["appname"]`. That is only correct because the ingress
+syslog source sets `parse_to: attributes` (see "Record shape" below).
+
+**The source default is `parse_to: body`**, which moves the parsed RFC fields
+into the body instead:
 
 ```yaml
 - from: attributes.appname
@@ -355,9 +357,66 @@ into attributes and then **moves them into the body**:
   type: move
 ```
 
-So by the time telemetry reaches the worker tier, appname lives at
-`body["appname"]`. Matching `attributes["appname"]` compiles fine, matches
-nothing, and dumps every record into the catch-all.
+Under that default the condition must be `body["appname"]`. The two settings are
+coupled: change one without the other and every condition compiles fine, matches
+nothing, and dumps all traffic into the catch-all. If routing suddenly sends
+everything to debug, check `parse_to` before anything else.
+
+### Record shape: raw body, metadata in attributes
+
+Bindplane Blueprints match the **raw log line**. Getting the record into that
+shape takes two things, and neither is the default.
+
+**1. `parse_to: attributes` on the syslog source.** The default (`body`) rewrites
+the body into a map of syslog parts, which no blueprint matches.
+
+**2. A transform processor on the ingress.** `parse_to: attributes` alone still
+leaves the body as the *whole* raw line, syslog header included:
+
+```
+<14>Sep  2 11:06:53 siem-edge-01 cef[pid42]: CEF:0|Enterprise|SIEM|...
+```
+
+The parser already extracted the clean payload into `attributes["message"]`, so
+`grrcon-syslog-unwrap` promotes it and drops the duplicate:
+
+```yaml
+- set(body, attributes["message"]) where attributes["message"] != nil
+- delete_key(attributes, "message")
+```
+
+It is attached to the syslog source only, so the OTLP source is untouched, and it
+runs on the ingress so every worker receives clean records.
+
+The result:
+
+```
+Body: Str(CEF:0|Endpoint|EDR|4.0|Threat|Ransomware|10|host=WORKSTATION01 ...)
+Attributes:
+     -> appname:       Str(cef)
+     -> hostname:      Str(siem-edge-01)
+     -> facility:      Int(1)
+     -> facility_text: Str(user)
+     -> priority:      Int(14)
+     -> proc_id:       Str(123)
+```
+
+**Two streams are still wrapped, and this pipeline cannot fix them.** The
+`palo-alto` and `apache` packages ship source lines with their *own* syslog
+prefix baked in, upstream in the blitz data library:
+
+| Stream | Body | Blueprint-ready |
+|---|---|---|
+| `winsec` | `<Event xmlns="http://schemas.microsoft.com/...` | yes |
+| `cef` | `CEF:0\|Identity\|IdP\|1.2\|...` | yes |
+| `appjson` | `{"component":"cache",...` | yes |
+| `paloalto` | `Sep  2 11:13:17 localhost 1,2026/09/02,...` | **no** -- embedded prefix |
+| `apache` | `<86>Wed Sep 02 ... httpd: 10.0.0.1 ...` | **no** -- embedded prefix |
+
+Unwrapping the outer syslog layer cannot reach a prefix that is part of the
+source data. If the PAN or Apache blueprints need bare payloads, either add a
+second transform that strips the embedded prefix per appname, or write clean
+samples into `samples/` the way `winsec.xml` works.
 
 ### `ottl` executes, `ui` draws
 
@@ -365,12 +424,12 @@ Each route condition carries both:
 
 ```yaml
 - condition:
-    ottl: body["appname"] == "winsec"      # what the collector evaluates
-    ui:                                     # what the Bindplane UI renders
+    ottl: attributes["appname"] == "winsec"   # what the collector evaluates
+    ui:                                       # what the Bindplane UI renders
       operator: ""
       statements:
         - key: appname
-          match: body
+          match: attributes
           operator: Equals
           value: winsec
   id: winsec
@@ -660,6 +719,6 @@ docker compose down -v                             # agents reconnect with same 
 | `.env.example` | template |
 | `credentials.json` | dummy SecOps service account -- gitignored, generate per step 2 |
 | `bindplane/fleets.yaml` | the `grrcon` and `grrcon-ingress` fleets |
-| `bindplane/ingress.yaml` | OTLP + syslog sources -> Bindplane Gateway destination |
-| `bindplane/router.yaml` | routing connector -- splits logs by `body["appname"]` |
+| `bindplane/ingress.yaml` | OTLP + syslog sources, unwrap processor -> Bindplane Gateway destination |
+| `bindplane/router.yaml` | routing connector -- splits logs by `attributes["appname"]` |
 | `bindplane/workers.yaml` | Bindplane Gateway source -> router -> five destinations |

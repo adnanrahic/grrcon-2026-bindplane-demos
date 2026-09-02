@@ -41,6 +41,13 @@ spec:
       value: rfc3164
     - name: connection_type
       value: udp
+    # Parse the RFC fields into ATTRIBUTES, leaving the body as the raw log
+    # line exactly as the source emitted it (Windows Event XML, PAN-OS CSV,
+    # CEF, Apache access log). Bindplane Blueprints match on that raw shape;
+    # the default (`body`) rewrites the body into a map of syslog parts and
+    # no blueprint matches it.
+    - name: parse_to
+      value: attributes
 ---
 # `bdot-pool` is a Docker network alias shared by all 10 workers, so this one
 # hostname resolves to 10 container IPs. enable_grpc_load_balancing makes the
@@ -70,6 +77,35 @@ spec:
     - name: retry_on_failure_enabled
       value: true
 ---
+# The syslog parser puts the RFC fields in attributes (parse_to: attributes) but
+# leaves the body as the WHOLE raw line, syslog header and all:
+#     <14>Sep  2 11:06:53 siem-edge-01 cef[pid42]: CEF:0|Enterprise|SIEM|...
+# Bindplane Blueprints match the bare payload, not a syslog-wrapped one. The
+# parser already extracted that payload into attributes["message"], so promote
+# it to the body and drop the now-duplicated attribute. Result:
+#     body       = CEF:0|Enterprise|SIEM|...        (what blueprints match)
+#     attributes = appname, hostname, facility, priority, proc_id
+apiVersion: bindplane.observiq.com/v1
+kind: Processor
+metadata:
+  name: grrcon-syslog-unwrap
+spec:
+  type: custom
+  parameters:
+    - name: telemetry_types
+      value:
+        - Logs
+    - name: configuration
+      value: |-
+        transform:
+          error_mode: ignore
+          log_statements:
+            - context: log
+              statements:
+                - set(body, attributes["message"]) where attributes["message"] != nil
+                - delete_key(attributes, "message")
+
+---
 apiVersion: bindplane.observiq.com/v2
 kind: Configuration
 metadata:
@@ -80,5 +116,7 @@ spec:
   sources:
     - name: grrcon-otlp-in
     - name: grrcon-syslog-in
+      processors:
+        - name: grrcon-syslog-unwrap
   destinations:
     - name: grrcon-worker-pool

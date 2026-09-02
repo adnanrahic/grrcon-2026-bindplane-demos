@@ -1,15 +1,16 @@
 # Routing connector: splits the merged worker-tier log stream back into its five
 # original sources and sends each to its own destination.
 #
-# Why body["appname"] and not attributes["appname"]:
-# Bindplane's syslog source parses RFC 5424 and then *moves* the parsed fields
-# out of attributes into the body map --
-#     - from: attributes.appname
-#       to:   body.appname
-#       type: move
-# so by the time telemetry reaches the worker tier, appname lives at
-# body["appname"]. Matching on attributes["appname"] silently matches nothing
-# and everything falls through to the catch-all.
+# Why attributes["appname"]:
+# The ingress syslog source sets `parse_to: attributes`, so the parsed RFC
+# fields (appname, hostname, facility, priority, ...) land in attributes and the
+# body is left as the raw log line the generator emitted. That raw body is what
+# Bindplane Blueprints match on.
+#
+# With the source default (`parse_to: body`) the parsed fields are moved INTO
+# the body instead, and the condition would need to be body["appname"]. If you
+# change parse_to, change these conditions to match -- a mismatch matches
+# nothing silently and everything falls through to the catch-all.
 #
 # Each APPNAME is set per generator in docker-compose.blitz.yaml. OTLP could not
 # carry this distinction: blitz hardcodes service.name="blitz" on OTLP output
@@ -32,52 +33,52 @@ spec:
     - name: routes
       value:
         - condition:
-            ottl: body["appname"] == "winsec"
+            ottl: attributes["appname"] == "winsec"
             ui:
               operator: ""
               statements:
                 - key: appname
-                  match: body
+                  match: attributes
                   operator: Equals
                   value: winsec
           id: winsec
         - condition:
-            ottl: body["appname"] == "paloalto"
+            ottl: attributes["appname"] == "paloalto"
             ui:
               operator: ""
               statements:
                 - key: appname
-                  match: body
+                  match: attributes
                   operator: Equals
                   value: paloalto
           id: paloalto
         - condition:
-            ottl: body["appname"] == "appjson"
+            ottl: attributes["appname"] == "appjson"
             ui:
               operator: ""
               statements:
                 - key: appname
-                  match: body
+                  match: attributes
                   operator: Equals
                   value: appjson
           id: appjson
         - condition:
-            ottl: body["appname"] == "apache"
+            ottl: attributes["appname"] == "apache"
             ui:
               operator: ""
               statements:
                 - key: appname
-                  match: body
+                  match: attributes
                   operator: Equals
                   value: apache
           id: apache
         - condition:
-            ottl: body["appname"] == "cef"
+            ottl: attributes["appname"] == "cef"
             ui:
               operator: ""
               statements:
                 - key: appname
-                  match: body
+                  match: attributes
                   operator: Equals
                   value: cef
           id: cef
