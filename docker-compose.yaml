@@ -46,6 +46,11 @@ services:
       - "13133:13133" # health check
     volumes:
       - bdot-ingress-storage:/etc/otel/storage
+      # The ingress now mirrors the native pipelines: it tails the same files as
+      # bdot-apache/bdot-cef, and exports to Google SecOps, whose chronicle
+      # exporter reads the credentials file AT STARTUP.
+      - ./logs:/logs:ro
+      - ./credentials.json:/opt/credentials.json:ro
     networks:
       - bdot-net
 

@@ -16,9 +16,14 @@ demonstrates fleet management, but no longer carries blitz log traffic.
   blitz-cef ─────file──────▶ bdot-cef     (grrcon-cef)     ──▶ Splunk HEC
   blitz-apache-native ─file▶ bdot-apache  (grrcon-apache)  ──▶ Elastic
 
-  GATEWAY TIER -- registers and rolls out, carries no blitz logs
+  GATEWAY TIER
 
   OTLP :4317/:4318 ──▶ bdot-ingress ──▶ bdot-pool (bdot-01..10, round-robin)
+
+  bdot-ingress also MIRRORS all five native pipelines, each source routed
+  straight to its own destination (v2 advanced routing, not via the pool):
+    apache (file) ─▶ Elastic     cef (file) ─▶ Splunk HEC        [receive data]
+    panos/appjson/winsec (tcp) ─▶ Dynatrace / SecOps        [bound but idle]
 ```
 
 Nothing in `docker-compose.yaml` defines a pipeline. The collectors register,
@@ -175,6 +180,33 @@ Five independent pipelines, one Bindplane configuration each:
 
 Each source stamps its own `log_type`, so there is no routing connector and no
 `appname` coupling: **the collector a stream lands on is its identity.**
+
+### The ingress mirrors all five
+
+`grrcon-ingress` references the same five Source resources and routes each one
+directly to its own destination, so the same pipelines exist in two places. Only
+the file-based ones actually dual-ingest:
+
+| Source | On the ingress |
+|---|---|
+| `grrcon-apache-in` (file) | **receives** — two collectors can tail one file, each keeping its own checkpoint |
+| `grrcon-cef-in` (file) | **receives** — same |
+| `grrcon-panos-in` (tcp) | bound on 5141, idle |
+| `grrcon-winsec-in` (tcp) | bound on 5142, idle |
+| `grrcon-appjson-in` (tcp) | bound on 5143, idle |
+
+**blitz supports one output per process**, so a TCP stream can only be sent to
+one target, and each currently goes to its edge collector. To make the ingress
+receive them too you need a duplicate generator per stream pointed at
+`bdot-ingress` — which doubles that stream's volume at its backend.
+
+The ingress's TCP ports are deliberately **not published**: `bdot-panos`,
+`bdot-winsec` and `bdot-appjson` already publish 5141/5142/5143, and a second
+publisher would collide on the host.
+
+Because the ingress now exports to Google SecOps, it mounts `credentials.json`
+— the chronicle exporter reads it at startup and the collector will not start
+without it.
 
 `Google-SecOps-Linux`, `Elastic` and `Dynatrace` are pre-existing resources in
 the Bindplane account, referenced by name rather than redefined so they keep

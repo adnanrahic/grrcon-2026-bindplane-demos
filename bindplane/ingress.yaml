@@ -1,7 +1,13 @@
-# The ingress now carries OTLP only. Each blitz stream lands on its own edge
-# collector instead (see bindplane/edge-*.yaml), so the syslog and PAN-OS TCP
-# sources that used to live here retired along with the gateway log path. The
-# worker pool and routing connector still register, but carry no blitz traffic.
+# The ingress carries OTLP to the worker pool, and ALSO mirrors all five native
+# pipelines -- each source routed straight to its own destination via v2
+# advanced routing, not through the pool.
+#
+# It shares these Source resources with the five edge collectors. Two collectors
+# tailing one file is fine (each keeps its own checkpoint), so the apache and cef
+# streams genuinely arrive twice. The three tcp sources listen on 5141/5142/5143
+# inside bdot-net but receive nothing unless a generator targets the ingress --
+# blitz supports one output per process, so each stream currently goes to its
+# edge collector only.
 ---
 apiVersion: bindplane.observiq.com/v1
 kind: Source
@@ -57,5 +63,62 @@ metadata:
 spec:
   sources:
   - name: grrcon-otlp-in
+    routes:
+      logs:
+      - id: '0'
+        components:
+        - destinations/d-grrcon-worker-pool
+      metrics:
+      - id: m0
+        components:
+        - destinations/d-grrcon-worker-pool
+      traces:
+      - id: t0
+        components:
+        - destinations/d-grrcon-worker-pool
+  - id: s-grrcon-apache-in
+    name: grrcon-apache-in
+    routes:
+      logs:
+      - id: '1'
+        components:
+        - destinations/d-Elastic
+  - id: s-grrcon-cef-in
+    name: grrcon-cef-in
+    routes:
+      logs:
+      - id: '2'
+        components:
+        - destinations/d-Splunk-HEC
+  - id: s-grrcon-panos-in
+    name: grrcon-panos-in
+    routes:
+      logs:
+      - id: '3'
+        components:
+        - destinations/d-Dynatrace
+  - id: s-grrcon-appjson-in
+    name: grrcon-appjson-in
+    routes:
+      logs:
+      - id: '4'
+        components:
+        - destinations/d-Dynatrace
+  - id: s-grrcon-winsec-in
+    name: grrcon-winsec-in
+    routes:
+      logs:
+      - id: '5'
+        components:
+        - destinations/d-Google-SecOps-Linux
   destinations:
-  - name: grrcon-worker-pool
+  - id: d-grrcon-worker-pool
+    name: grrcon-worker-pool
+  - id: d-Elastic
+    name: Elastic
+  - id: d-Splunk-HEC
+    name: Splunk-HEC
+  - id: d-Dynatrace
+    name: Dynatrace
+  - id: d-Google-SecOps-Linux
+    name: Google-SecOps-Linux
