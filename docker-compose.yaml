@@ -43,7 +43,8 @@ services:
     ports:
       - "4317:4317"   # OTLP gRPC -- external telemetry in
       - "4318:4318"   # OTLP HTTP
-      - "5140:5140/udp" # RFC 5424 syslog -- every blitz stream
+      - "5140:5140/udp" # RFC 3164 syslog -- winsec, appjson, cef, apache
+      - "5141:5141"     # raw TCP -- PAN-OS CSV for the Palo Alto blueprint
       - "13133:13133" # health check
     volumes:
       - bdot-ingress-storage:/etc/otel/storage
@@ -220,8 +221,28 @@ services:
         aliases:
           - bdot-pool
 
+  # Edge collector: tails the native Apache access log that blitz writes to the
+  # shared ./logs volume. Not a worker -- it carries no bdot-pool alias, and its
+  # configuration ships straight to Elastic rather than through the pool, so the
+  # ingress/worker/router path is untouched by this addition.
+  bdot-apache:
+    <<: *bdot
+    container_name: bdot-apache
+    hostname: bdot-apache
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T11
+      OPAMP_AGENT_NAME: bdot-apache
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-apache
+    volumes:
+      - bdot-apache-storage:/etc/otel/storage
+      - ./logs:/logs:ro
+    networks:
+      - bdot-net
+
 volumes:
   bdot-ingress-storage:
+  bdot-apache-storage:
   bdot-01-storage:
   bdot-02-storage:
   bdot-03-storage:

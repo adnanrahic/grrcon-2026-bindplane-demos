@@ -31,6 +31,7 @@
 #   PAN_RATE=500ms        PAN_WORKERS=2       JSON_RATE=1s   JSON_WORKERS=1
 #   CEF_RATE=1s           CEF_WORKERS=1
 #   APACHE_RATE=1s        APACHE_WORKERS=1
+#   APACHE_NATIVE_RATE=1s APACHE_NATIVE_WORKERS=1
 #   COLLECTOR_HOST=bdot-ingress               BLITZ_LOG_LEVEL=info
 
 # Own project name so this stack and the collector stack stay separate --
@@ -92,9 +93,22 @@ services:
     <<: *blitz-common
     container_name: blitz-palo-alto
     environment:
-      <<: *blitz-syslog-env
-      BLITZ_OUTPUT_SYSLOG_APPNAME: paloalto
-      BLITZ_OUTPUT_SYSLOG_HOSTNAME: pan-fw-01
+      # Raw TCP, not syslog. Bindplane's Palo Alto blueprint
+      # (dynatrace-palo-alto-security-full-pipeline) receives PAN-OS over
+      # TCP/UDP and strips the syslog header itself with:
+      #   ^.+?(?P<message>\d,\d{4}\/\d{2}\/\d{2}.+)
+      # The package:palo-alto/csv lines already carry a `%b %e %T localhost `
+      # header, which is exactly what that regex expects. Sending them over
+      # blitz's syslog output wrapped them a SECOND time; raw TCP delivers the
+      # line the blueprint was written for.
+      #
+      # TCP over UDP: blitz's tcp output appends \n, which is what tcplog
+      # framing needs, and there is no datagram loss.
+      BLITZ_LOGGING_LEVEL: ${BLITZ_LOG_LEVEL:-info}
+      BLITZ_OUTPUT_TYPE: tcp
+      BLITZ_OUTPUT_TCP_HOST: ${COLLECTOR_HOST:-bdot-ingress}
+      BLITZ_OUTPUT_TCP_PORT: ${PANOS_TCP_PORT:-5141}
+      BLITZ_OUTPUT_TCP_WORKERS: "1"
       BLITZ_GENERATOR_TYPE: filegen
       BLITZ_GENERATOR_FILEGEN_SOURCE: "package:palo-alto/csv"
       BLITZ_GENERATOR_FILEGEN_WORKERS: ${PAN_WORKERS:-2}
@@ -164,6 +178,39 @@ services:
       BLITZ_DATA_LIBRARY_DIR: /data_library
     volumes:
       - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
+
+  # 6. Apache access logs in NATIVE Common Log Format, written to a file.
+  #
+  #    This is the only stream that does not go over syslog, and deliberately
+  #    so. Bindplane's format-specific log sources (apache_common, nginx, cef,
+  #    csv, w3c, iis) all resolve to a `file_log` receiver -- they tail files
+  #    and have NO listener mode. To use one, something must write a file.
+  #
+  #    It also uses blitz's native `apache-common` GENERATOR rather than
+  #    filegen: the data_library/apache samples carry a `<86>... httpd:` syslog
+  #    prefix and two leading IPs, so the CLF regex will never match them. The
+  #    native generator builds a real CLF line, and the `file` output writes it
+  #    byte-for-byte with no wrapper.
+  #
+  #    user: 10005 is load-bearing. blitz's file output (lumberjack) creates
+  #    files 0600, and the collector runs as uid 10005 (otel). A root-owned
+  #    0600 file is unreadable and the source tails NOTHING WITHOUT ERROR.
+  #    Running blitz as that uid makes every file it creates readable.
+  blitz-apache-native:
+    <<: *blitz-common
+    container_name: blitz-apache-native
+    user: "10005:10005"
+    environment:
+      BLITZ_LOGGING_LEVEL: ${BLITZ_LOG_LEVEL:-info}
+      BLITZ_GENERATOR_TYPE: apache-common
+      BLITZ_GENERATOR_APACHE_COMMON_WORKERS: ${APACHE_NATIVE_WORKERS:-1}
+      BLITZ_GENERATOR_APACHE_COMMON_RATE: ${APACHE_NATIVE_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: file
+      BLITZ_OUTPUT_FILE_PATH: /logs/apache/access.log
+      BLITZ_OUTPUT_FILE_WORKERS: "1"
+      BLITZ_OUTPUT_FILE_ROTATION_COMPRESS: "false"
+    volumes:
+      - ./logs:/logs
 
 networks:
   bdot-net:

@@ -6,9 +6,9 @@ a pool of ten workers, which split it back apart by source and send each stream
 to its own backend.
 
 ```
-  5 blitz streams (winsec · paloalto · appjson · apache · cef)
-          |  RFC 3164 syslog, one APPNAME per stream
-          v  localhost:5140/udp   (also 4317/4318 OTLP)
+  4 syslog streams (winsec · appjson · apache · cef)   paloalto (raw TCP)
+          |  RFC 3164, one APPNAME per stream                 |  log_type
+          v  localhost:5140/udp   (also 4317/4318 OTLP)       v  localhost:5141
   +-----------------+
   |  bdot-ingress   |   fleet=grrcon-ingress
   +-----------------+
@@ -27,6 +27,9 @@ to its own backend.
   +--------------+------------+---------+-------------+-----------+
                      unmatched -> debug (should always be empty)
 ```
+
+A sixth stream bypasses this entirely — native Apache CLF written to a file and
+tailed by a dedicated edge collector, straight to Elastic. See "Native formats".
 
 Nothing in `docker-compose.yaml` defines a pipeline. The collectors register,
 report their labels, and pull their configuration from Bindplane. Pipelines
@@ -107,7 +110,17 @@ working exporter that cannot reach its backend.
 Compose mounts it read-only at `/opt/credentials.json` on the **ten workers
 only**; the ingress has no SecOps exporter and does not get it.
 
-### 3. Point the CLI at your account
+### 3. Shared log directory
+
+`blitz-apache-native` writes native CLF here and `bdot-apache` tails it:
+
+```bash
+mkdir -p logs/apache && chmod 777 logs/apache
+```
+
+The mode matters — see the permissions trap under "Native formats".
+
+### 4. Point the CLI at your account
 
 ```bash
 bindplane profile create grrcon \
@@ -120,7 +133,7 @@ Note this is an **API key**, a different credential from the
 `BINDPLANE_SECRET_KEY` in `.env`. The secret key authenticates *collectors* over
 OpAMP; the API key authenticates the *CLI* against the management API.
 
-### 4. Apply, start, roll out -- in this order
+### 5. Apply, start, roll out -- in this order
 
 ```bash
 bindplane apply -f bindplane/     # MUST come first
@@ -483,17 +496,19 @@ renaming either could break `bindplane apply -f bindplane/`.
 
 ## What blitz generates
 
-`docker-compose.blitz.yaml` runs five generators, all sending **RFC 3164 syslog**
-to `bdot-ingress:5140/udp` over `bdot-net`. Each carries a distinct `APPNAME`,
-which is what the routing connector splits on.
+`docker-compose.blitz.yaml` runs six generators over three transports. Four ship
+**RFC 3164 syslog** to `bdot-ingress:5140/udp`, each with a distinct `APPNAME`
+that the routing connector splits on. Palo Alto ships **raw TCP** to `:5141`,
+and the native Apache stream writes a **file**. See "Native formats" for why.
 
 | Service | `APPNAME` | Syslog hostname | Generator | Source | Rate | Workers |
 |---|---|---|---|---|---|---|
 | `blitz-winsec` | `winsec` | `dc01.contoso.local` | `filegen` | `./samples/winsec.xml` | 500ms | 2 |
-| `blitz-palo-alto` | `paloalto` | `pan-fw-01` | `filegen` | `package:palo-alto/csv` | 500ms | 2 |
+| `blitz-palo-alto` | *(TCP, `log_type=palo-alto`)* | — | `filegen` | `package:palo-alto/csv` | 500ms | 2 |
 | `blitz-json` | `appjson` | `app-worker-01` | `json` | `default`, synthesized | 1s | 1 |
 | `blitz-cef` | `cef` | `siem-edge-01` | `filegen` | `package:universal-cef` | 1s | 1 |
 | `blitz-apache` | `apache` | `apache.httpserver.test` | `filegen` | `package:apache` | 1s | 1 |
+| `blitz-apache-native` | *(file, native CLF)* | — | `apache-common` | generated | 1s | 1 |
 
 Changing an `APPNAME` without changing the matching route in
 `bindplane/router.yaml` sends that stream to the catch-all.
@@ -616,6 +631,101 @@ COLLECTOR_HOST=bdot-ingress               COLLECTOR_NETWORK=bdot-net
 SYSLOG_PORT=5140       SYSLOG_TRANSPORT=udp
 ```
 
+## Native formats: files, not the wire
+
+Bindplane's format-specific log sources — `apache_common`, `apache_combined`,
+`apache_http`, `nginx`, `common_event_format`, `csv`, `w3c`, `iis` — all render
+to a `plugin/...` receiver that resolves to `file_log`. **They tail files and
+have no listener mode.** Only generic sources (`syslog`, `tcp`, `udp`, `otlp`,
+`http`, `splunk_tcp`, `splunkhec`, `fluentforward`) accept pushed data.
+
+So a native format reaches a native receiver only by way of a file on disk.
+
+### The Apache path
+
+`blitz-apache-native` uses blitz's native **`apache-common` generator** — not
+`filegen`. That distinction matters: the `data_library/apache` samples carry a
+`<86>… httpd:` syslog prefix *and* two leading IPs, so the CLF regex will never
+match them. The native generator constructs a real CLF line, and blitz's `file`
+output writes it byte-for-byte with no wrapper:
+
+```
+124.159.111.209 - - [02/Sep/2026:12:16:27 +0000] "DELETE /api/v1/products HTTP/1.1" 200 9482648
+```
+
+`bdot-apache` (a 12th collector, fleet `grrcon-edge`) tails
+`/logs/apache/access.log` with the `apache_common` source and ships **straight
+to Elastic**, bypassing the worker pool — which is what makes this path additive:
+the ingress, workers and router are untouched by it.
+
+Verified parse output:
+
+```
+Body: Map({"remote_addr":"77.62.106.165","method":"DELETE","path":"/api/v1/transfers",
+           "status":"204","body_bytes_sent":"7585681","protocol":"HTTP",
+           "protocol_version":"1.1","log_type":"apache_common",
+           "time":"02/Sep/2026:12:20:06 +0000"})
+```
+
+**The permissions trap.** blitz's file output uses lumberjack, which creates
+files `0600` — including after rotation. The collector runs as `uid=10005(otel)`
+and the blitz image is `FROM scratch` running as root. A root-owned `0600` file
+is unreadable and **the source tails nothing without reporting an error.**
+`user: "10005:10005"` on the blitz service fixes it; the host directory must be
+writable by that uid:
+
+```bash
+mkdir -p logs/apache && chmod 777 logs/apache
+```
+
+Use the **exact file path, not a glob** — lumberjack rotates to siblings like
+`access-2026-09-02T….log`, and a glob would tail those too.
+
+### The Palo Alto path
+
+There is no `palo_alto` source type, and that turns out not to matter. The
+blueprint **`dynatrace-palo-alto-security-full-pipeline`** defines exactly two
+sources — `type: tcp` and `type: udp` — and its first processor is "Strip Syslog
+Header":
+
+```yaml
+type: parse_regex
+log_regex_pattern: ^.+?(?P<message>\d,\d{4}\/\d{2}\/\d{2}.+)
+```
+
+The `package:palo-alto/csv` samples already carry a `%b %e %T localhost ` header,
+which is exactly what that regex expects. Sending them over blitz's syslog
+output wrapped them a *second* time. `blitz-palo-alto` now uses raw **TCP** to
+port 5141, so the body arrives as the blueprint was written for:
+
+```
+Sep  2 12:26:49 localhost 1,2026/09/02 12:26:49,001901000123,AUTHENTICATION,auth,,...
+```
+
+TCP rather than UDP because blitz's tcp output appends `\n`, which `tcplog`
+framing needs, and there is no datagram loss.
+
+The `tcp` source stamps **`log_type: palo-alto`**, so this stream routes on
+`attributes["log_type"]` — the idiomatic Bindplane routing key, which every
+source exposes and which the account's own `gateway-router` already uses. The
+other four streams still route on `appname`.
+
+### Still not possible
+
+**Windows Events.** `windowsevents_v3` uses the `windowseventlog` receiver
+(Windows Event Log API). It cannot read a file and cannot run in a Linux
+container. The `winsec` stream stays on syslog.
+
+### Not yet applied
+
+The parsing bundles are available but not wired up:
+`palo-alto-full-log-parsing-and-reduction-bundle` (23 processors — parses all
+PAN-OS types, with toggleable volume-reduction filters),
+`enrich-palo-alto-security-events` (MITRE ATT&CK), and
+`elasticsearch-apache-common-full-pipeline`. `processor_bundle` is a container
+type with no parameters, so a bundle is instantiated through the Bindplane UI
+and then captured back with `bindplane get processors --export`.
+
 ## Progressive rollout demo
 
 ```bash
@@ -718,6 +828,8 @@ docker compose down -v                             # agents reconnect with same 
 | `.env` | secret key and endpoint -- gitignored, never commit |
 | `.env.example` | template |
 | `credentials.json` | dummy SecOps service account -- gitignored, generate per step 2 |
+| `logs/apache/access.log` | native CLF written by blitz, tailed by `bdot-apache` -- gitignored |
+| `bindplane/edge.yaml` | `grrcon-edge` fleet, native `apache_common` source -> Elastic |
 | `bindplane/fleets.yaml` | the `grrcon` and `grrcon-ingress` fleets |
 | `bindplane/ingress.yaml` | OTLP + syslog sources, unwrap processor -> Bindplane Gateway destination |
 | `bindplane/router.yaml` | routing connector -- splits logs by `attributes["appname"]` |

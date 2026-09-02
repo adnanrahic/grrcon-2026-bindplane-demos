@@ -43,14 +43,17 @@ spec:
                   value: winsec
           id: winsec
         - condition:
-            ottl: attributes["appname"] == "paloalto"
+            # PAN arrives over raw TCP, not syslog, so it has no appname.
+            # The tcp source stamps log_type=palo-alto instead -- the idiomatic
+            # Bindplane routing key.
+            ottl: attributes["log_type"] == "palo-alto"
             ui:
               operator: ""
               statements:
-                - key: appname
+                - key: log_type
                   match: attributes
                   operator: Equals
-                  value: paloalto
+                  value: palo-alto
           id: paloalto
         - condition:
             ottl: attributes["appname"] == "appjson"
