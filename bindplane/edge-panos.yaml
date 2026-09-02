@@ -1,0 +1,42 @@
+# Palo Alto PAN-OS -> Dynatrace.
+#
+# There is no palo_alto source type; Bindplane's own PAN blueprint
+# (dynatrace-palo-alto-security-full-pipeline) uses a generic tcp/udp source and
+# strips the syslog header downstream with
+#   ^.+?(?P<message>\d,\d{4}\/\d{2}\/\d{2}.+)
+# so parse_format stays `none` here and the blueprint does the work. TCP rather
+# than UDP because blitz's tcp output appends \n, which tcplog framing needs.
+apiVersion: bindplane.observiq.com/v1
+kind: Source
+metadata:
+  name: grrcon-panos-in
+spec:
+  type: tcp
+  parameters:
+    - name: listen_ip
+      value: "0.0.0.0"
+    - name: listen_port
+      value: 5141
+    - name: log_type
+      value: palo-alto
+    - name: parse_format
+      value: none
+---
+apiVersion: bindplane.observiq.com/v2
+kind: Configuration
+metadata:
+  name: grrcon-panos
+  labels:
+    platform: linux
+spec:
+  sources:
+    - id: s-grrcon-panos-in
+      name: grrcon-panos-in
+      routes:
+        logs:
+          - id: "0"
+            components:
+              - destinations/d-Dynatrace
+  destinations:
+    - id: d-Dynatrace
+      name: Dynatrace

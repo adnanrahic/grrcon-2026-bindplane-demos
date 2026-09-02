@@ -1,39 +1,36 @@
 # GrrCON demo: Bindplane-managed gateway topology
 
-Eleven BDOT collectors in Docker, all managed from Bindplane Cloud over OpAMP:
-one ingress collector holding the only open ports, fanning telemetry out across
-a pool of ten workers, which split it back apart by source and send each stream
-to its own backend.
+Sixteen BDOT collectors in Docker, all managed from Bindplane Cloud over OpAMP.
+
+Five **edge collectors**, one per source+destination pipeline, each with its own
+Bindplane configuration. Alongside them a **gateway tier** -- one ingress and ten
+workers behind a load-balanced alias -- which still registers and still
+demonstrates fleet management, but no longer carries blitz log traffic.
 
 ```
-  4 syslog streams (winsec · appjson · apache · cef)   paloalto (raw TCP)
-          |  RFC 3164, one APPNAME per stream                 |  log_type
-          v  localhost:5140/udp   (also 4317/4318 OTLP)       v  localhost:5141
-  +-----------------+
-  |  bdot-ingress   |   fleet=grrcon-ingress
-  +-----------------+
-          |  bdot-pool:4317, gRPC round-robin
-          v
-  +---------------------------------------------------------------+
-  | bdot-01  bdot-02 | bdot-03 bdot-04 ... bdot-10                 |
-  |   env=canary     |            env=prod                         |
-  +---------------------------------------------------------------+
-              fleet=grrcon, role=worker, alias bdot-pool
-          |
-          v  routing connector, matching attributes["appname"]
-  +--------------+------------+---------+-------------+-----------+
-  | winsec       | paloalto   | appjson | apache      | cef       |
-  | Google SecOps| Dynatrace  |Dynatrace| Elastic     | Splunk HEC|
-  +--------------+------------+---------+-------------+-----------+
-                     unmatched -> debug (should always be empty)
-```
+  EDGE TIER -- one collector per pipeline, one configuration each
 
-A sixth stream bypasses this entirely — native Apache CLF written to a file and
-tailed by a dedicated edge collector, straight to Elastic. See "Native formats".
+  blitz-winsec ──tcp:5142──▶ bdot-winsec  (grrcon-winsec)  ──▶ Google SecOps
+  blitz-palo-alto ─tcp:5141▶ bdot-panos   (grrcon-panos)   ──▶ Dynatrace
+  blitz-json ────tcp:5143──▶ bdot-appjson (grrcon-appjson) ──▶ Dynatrace
+  blitz-cef ─────file──────▶ bdot-cef     (grrcon-cef)     ──▶ Splunk HEC
+  blitz-apache-native ─file▶ bdot-apache  (grrcon-apache)  ──▶ Elastic
+
+  GATEWAY TIER -- registers and rolls out, carries no blitz logs
+
+  OTLP :4317/:4318 ──▶ bdot-ingress ──▶ bdot-pool (bdot-01..10, round-robin)
+```
 
 Nothing in `docker-compose.yaml` defines a pipeline. The collectors register,
 report their labels, and pull their configuration from Bindplane. Pipelines
-live in `bindplane/`.
+live in `bindplane/` -- one `edge-*.yaml` per pipeline.
+
+**One configuration per source+destination pair** is the organising idea. A
+collector can only hold one configuration, so each pipeline gets its own
+collector. That is also the shape Bindplane's `full_pipeline_blueprint`s are
+written in (`elasticsearch-apache-common-full-pipeline`,
+`dynatrace-palo-alto-security-full-pipeline`), so each config here can adopt its
+blueprint without disturbing the others.
 
 ## Why it is shaped this way
 
@@ -42,9 +39,13 @@ Docker's embedded DNS returns all ten container IPs for that one name, so the
 ingress destination targets a single hostname with gRPC load balancing enabled.
 Add or remove workers and the Bindplane config never changes.
 
-**Only the ingress publishes ports.** The workers listen on 4317 inside
-`bdot-net` only. One door in, ten collectors behind it -- and no ten-way fight
-over port 4317 on your laptop.
+**Each edge collector owns its ingest.** `bdot-panos`, `bdot-winsec` and
+`bdot-appjson` listen on 5141/5142/5143; `bdot-apache` and `bdot-cef` tail files
+instead. blitz reaches them by container name on `bdot-net`, so the published
+ports exist only so you can send test traffic from the laptop.
+
+**The gateway tier still publishes 4317/4318** for anything speaking OTLP. The
+workers listen on 4317 inside `bdot-net` only.
 
 **The ingress lives in its own fleet.** A collector can belong to exactly one
 fleet at a time, so `fleet=` is the one mutually exclusive label here: the
@@ -52,8 +53,9 @@ ingress is `fleet=grrcon-ingress`, the ten workers are `fleet=grrcon`. The front
 door can be upgraded, restarted, or rolled without touching the pool, and a
 fleet-wide action aimed at the workers can never reach it.
 
-**The ingress is not labeled `env=`.** It is also the only collector without a
-SecOps exporter, so it needs no credentials file.
+**The ingress is not labeled `env=`.** `bdot-winsec` is the only edge collector
+that needs `credentials.json` -- it is the one exporting to Google SecOps, and
+the chronicle exporter reads that file at startup.
 
 **Agent IDs are pinned ULIDs** (`...BD0T00` through `...BD0T10`), so the same
 eleven agents reconnect after any restart -- even `docker compose down -v`.
@@ -115,10 +117,12 @@ only**; the ingress has no SecOps exporter and does not get it.
 `blitz-apache-native` writes native CLF here and `bdot-apache` tails it:
 
 ```bash
-mkdir -p logs/apache && chmod 777 logs/apache
+mkdir -p logs/apache logs/cef && chmod 777 logs/apache logs/cef
 ```
 
-The mode matters — see the permissions trap under "Native formats".
+The mode matters — see the permissions trap under "Native formats". After the
+first run, also `chmod 644 logs/*/*.log`: blitz creates files `0600` and the
+collector cannot read them otherwise.
 
 ### 4. Point the CLI at your account
 
@@ -157,27 +161,25 @@ Roll the workers before the ingress so the pool is listening on 4317 before the
 front door starts forwarding. Out of order it still converges -- the exporter
 retries -- but you will see a burst of `connection refused` in the ingress log.
 
-## Destinations
+## Pipelines
 
-Logs no longer fan out to every destination. A routing connector splits them by
-source -- see "Routing" below.
+Five independent pipelines, one Bindplane configuration each:
 
-| Stream (`appname`) | Destination | Type | Why |
-|---|---|---|---|
-| `winsec` | `Google-SecOps-Linux` | `chronicle` | SecOps-specific Pipeline Intelligence actions ("Standardize Log Type for SecOps", "Validate SecOps Parser") |
-| `paloalto` | `Dynatrace` | `dynatrace_otlp` | Palo Alto enrichment blueprint |
-| `appjson` | `Dynatrace` | `dynatrace_otlp` | app telemetry alongside the PAN stream |
-| `apache` | `Elastic` | `elasticsearch_otlp` | Apache/NGINX Full-Pipeline Blueprint |
-| `cef` | `Splunk-HEC` | `splunkhec_v2` | SIEM ingest -- where the cost-reduction story lands |
-| *(unmatched)* | `grrcon-debug-out` | `custom` (debug) | catch-all; traffic here means a route stopped matching |
+| Pipeline | Collector | Source type | Ingest | Destination |
+|---|---|---|---|---|
+| `grrcon-winsec` | `bdot-winsec` | `tcp` (`parse_format: none`) | tcp :5142 | `Google-SecOps-Linux` |
+| `grrcon-panos` | `bdot-panos` | `tcp` (`parse_format: none`) | tcp :5141 | `Dynatrace` |
+| `grrcon-appjson` | `bdot-appjson` | `tcp` (`parse_format: json`) | tcp :5143 | `Dynatrace` |
+| `grrcon-cef` | `bdot-cef` | `common_event_format` | file | `Splunk-HEC` |
+| `grrcon-apache` | `bdot-apache` | `apache_common` | file | `Elastic` |
 
-Metrics and traces skip the router entirely and go straight to debug -- blitz
-sends logs only, so those are collector self-telemetry.
+Each source stamps its own `log_type`, so there is no routing connector and no
+`appname` coupling: **the collector a stream lands on is its identity.**
 
-Three of these -- SecOps, Elastic, Dynatrace -- are pre-existing resources in the
-Bindplane account, referenced by name rather than redefined, so they keep their
-real credentials. `bindplane apply` against a **fresh** account will fail until
-those three exist.
+`Google-SecOps-Linux`, `Elastic` and `Dynatrace` are pre-existing resources in
+the Bindplane account, referenced by name rather than redefined so they keep
+their real credentials. `bindplane apply` against a **fresh** account needs those
+three created first. `Splunk-HEC` is defined in `bindplane/workers.yaml`.
 
 ### Known state of each backend
 
@@ -270,48 +272,41 @@ Push real telemetry through the front door:
 docker compose -f docker-compose.blitz.yaml up -d
 ```
 
-### Is routing working?
+### Are all five pipelines carrying data?
 
-The catch-all feeds debug, so **debug should be silent**. Any output here means a
-stream stopped matching its route:
-
-```bash
-for i in $(seq -w 1 10); do
-  docker logs --since 3m bdot-$i 2>&1 \
-    | grep -o '"log records":[0-9]*' | awk -F: '{s+=$2} END{print s+0}'
-done | paste -sd+ - | bc      # expect 0
-```
-
-Non-zero means look at the appname: either an `APPNAME` changed in
-`docker-compose.blitz.yaml` without its route being updated, or syslog parsing
-broke and every record is unparsed (see "RFC 3164" above).
-
-### Is data reaching the destinations?
-
-Since debug no longer sees the traffic, use the destinations themselves. All four
-currently fail to export, and the *errors* are the evidence -- each names its
-exporter, so the mix shows the split:
+Every destination currently fails to export, and those errors are the evidence —
+each names its exporter, so a non-zero count per collector proves records reached
+it:
 
 ```bash
-docker logs --since 2m bdot-01 2>&1 | grep '"level":"error"' \
-  | grep -oE 'otlp_http/[A-Za-z]+|splunk_hec/[A-Za-z_-]+|chronicle/[A-Za-z-]+' \
-  | sort | uniq -c
+for row in bdot-apache:Elastic bdot-cef:Splunk bdot-panos:Dynatrace \
+           bdot-appjson:Dynatrace bdot-winsec:SecOps; do
+  n=${row%%:*}; d=${row##*:}
+  printf "%-14s -> %-10s %s\n" "$n" "$d" \
+    "$(docker logs --since 60s $n 2>&1 | grep -c "$d")"
+done
 ```
 
-Healthy output looks roughly like this -- Dynatrace highest because it takes two
-streams, SecOps near-silent because it fails quietly with dummy credentials:
+All five should be non-zero. A zero on `bdot-apache` or `bdot-cef` almost always
+means file permissions — check `docker exec <collector> stat -c '%U %a' <path>`;
+it must be readable by `otel`.
 
+Confirm each collector is on its own configuration:
+
+```bash
+bindplane get agents --selector fleet=grrcon-edge
 ```
- 121 otlp_http/Dynatrace
-  30 otlp_http/Elastic
-  30 splunk_hec/Splunk-HEC__logs
-   3 chronicle/Google-SecOps-Linux
+
+### Is the gateway tier still healthy?
+
+It carries no blitz logs any more, so the workers should be quiet — that is
+expected, not a fault:
+
+```bash
+bindplane get agents --selector fleet=grrcon    # 10, all Connected
 ```
 
-Once a backend actually accepts data this trick stops working -- use Bindplane's
-per-destination throughput in the UI instead.
-
-### Is the pool balanced? Expect a spread rather than an even split:
+### Is the pool balanced?### Is the pool balanced? Expect a spread rather than an even split:
 `round_robin` balances per gRPC *connection*, not per record, so at low
 connection counts some workers run 2-3x others. That is not a fault.
 
@@ -327,7 +322,13 @@ docker exec bdot-ingress sh -c 'cat ./config.yaml' | grep -A3 otlp_grpc
 `debug/grrcon-debug-out`. Older collector builds wrote `LogsExporter`; grepping
 for that against v1.106 silently returns zero and looks exactly like an outage.
 
-## Routing
+## Routing (gateway tier — no longer in the log path)
+
+> **Retired for logs.** Each stream now lands on its own edge collector, so
+> nothing needs splitting after the fact. `bindplane/router.yaml` and the worker
+> configuration still exist and still roll out; they simply carry no blitz
+> traffic. Kept because the mechanics below are worth knowing, and because the
+> gateway tier is still the fleet-management and progressive-rollout demo.
 
 `bindplane/router.yaml` defines a `kind: Connector` of type `routing`. The
 worker configuration sends logs into it, and it fans them out by source.
@@ -452,15 +453,15 @@ Leave `ui.statements` empty and the routing node shows **no conditions in the
 UI** even though it routes correctly -- and anyone editing it in the UI can
 silently overwrite the working `ottl`. Keep the two in sync.
 
-### Why syslog and not OTLP
+### Why not OTLP
 
-blitz hardcodes `service.name = "blitz"` on OTLP output
+Relevant if you ever collapse these streams back onto one collector: blitz
+hardcodes `service.name = "blitz"` on OTLP output
 (`output/otlp_grpc/otlp_grpc.go:699`) with no config override, and the logs path
-builds a Resource containing only that one attribute. Over OTLP all five streams
-are indistinguishable, and there is nothing to route on but body regex.
-
-Syslog carries a per-stream `APPNAME`, set in `docker-compose.blitz.yaml`. That
-is the whole reason the transport changed.
+builds a Resource containing only that one attribute. Over OTLP every stream is
+indistinguishable, leaving nothing to route on but body regex. Raw TCP and files
+carry the generator's line verbatim, which is why the per-pipeline split uses
+them instead.
 
 ### RFC 3164, not 5424 -- this one will bite you
 
@@ -496,22 +497,23 @@ renaming either could break `bindplane apply -f bindplane/`.
 
 ## What blitz generates
 
-`docker-compose.blitz.yaml` runs six generators over three transports. Four ship
-**RFC 3164 syslog** to `bdot-ingress:5140/udp`, each with a distinct `APPNAME`
-that the routing connector splits on. Palo Alto ships **raw TCP** to `:5141`,
-and the native Apache stream writes a **file**. See "Native formats" for why.
+`docker-compose.blitz.yaml` runs five generators, each pointed at **its own edge
+collector**. No syslog and no `APPNAME` any more: the collector a stream reaches
+is its identity. Raw TCP carries the generator's line verbatim; the two streams
+with a native file-based source write files instead. See "Native formats" for why.
 
-| Service | `APPNAME` | Syslog hostname | Generator | Source | Rate | Workers |
+| Service | Transport | Target | Generator | Source | Rate | Workers |
 |---|---|---|---|---|---|---|
-| `blitz-winsec` | `winsec` | `dc01.contoso.local` | `filegen` | `./samples/winsec.xml` | 500ms | 2 |
-| `blitz-palo-alto` | *(TCP, `log_type=palo-alto`)* | — | `filegen` | `package:palo-alto/csv` | 500ms | 2 |
-| `blitz-json` | `appjson` | `app-worker-01` | `json` | `default`, synthesized | 1s | 1 |
-| `blitz-cef` | `cef` | `siem-edge-01` | `filegen` | `package:universal-cef` | 1s | 1 |
-| `blitz-apache` | `apache` | `apache.httpserver.test` | `filegen` | `package:apache` | 1s | 1 |
-| `blitz-apache-native` | *(file, native CLF)* | — | `apache-common` | generated | 1s | 1 |
+| `blitz-winsec` | tcp | `bdot-winsec:5142` | `filegen` | `./samples/winsec.xml` | 500ms | 2 |
+| `blitz-palo-alto` | tcp | `bdot-panos:5141` | `filegen` | `package:palo-alto/csv` | 500ms | 2 |
+| `blitz-json` | tcp | `bdot-appjson:5143` | `json` | `default`, synthesized | 1s | 1 |
+| `blitz-cef` | file | `/logs/cef/events.log` | `filegen` | `package:universal-cef` | 1s | 1 |
+| `blitz-apache-native` | file | `/logs/apache/access.log` | `apache-common` | generated | 1s | 1 |
 
-Changing an `APPNAME` without changing the matching route in
-`bindplane/router.yaml` sends that stream to the catch-all.
+
+`blitz-apache` (the old `filegen` + `package:apache` service) has been removed:
+its lines carry an embedded syslog prefix and two leading IPs, so no Apache
+parser can match them. `blitz-apache-native` supersedes it.
 
 `filegen` picks **one random line per cycle**, so a file's line mix is the mix on
 the wire.
@@ -628,7 +630,7 @@ JSON_RATE=1s           JSON_WORKERS=1
 CEF_RATE=1s            CEF_WORKERS=1
 APACHE_RATE=1s         APACHE_WORKERS=1
 COLLECTOR_HOST=bdot-ingress               COLLECTOR_NETWORK=bdot-net
-SYSLOG_PORT=5140       SYSLOG_TRANSPORT=udp
+PANOS_TCP_PORT=5141    WINSEC_TCP_PORT=5142    APPJSON_TCP_PORT=5143
 ```
 
 ## Native formats: files, not the wire
@@ -828,8 +830,12 @@ docker compose down -v                             # agents reconnect with same 
 | `.env` | secret key and endpoint -- gitignored, never commit |
 | `.env.example` | template |
 | `credentials.json` | dummy SecOps service account -- gitignored, generate per step 2 |
-| `logs/apache/access.log` | native CLF written by blitz, tailed by `bdot-apache` -- gitignored |
-| `bindplane/edge.yaml` | `grrcon-edge` fleet, native `apache_common` source -> Elastic |
+| `logs/` | native-format files written by blitz, tailed by the edge collectors -- gitignored |
+| `bindplane/edge-apache.yaml` | `apache_common` (file) -> Elastic |
+| `bindplane/edge-cef.yaml` | `common_event_format` (file) -> Splunk HEC |
+| `bindplane/edge-panos.yaml` | `tcp` :5141 -> Dynatrace |
+| `bindplane/edge-winsec.yaml` | `tcp` :5142 -> Google SecOps |
+| `bindplane/edge-appjson.yaml` | `tcp` :5143 (JSON parsed) -> Dynatrace |
 | `bindplane/fleets.yaml` | the `grrcon` and `grrcon-ingress` fleets |
 | `bindplane/ingress.yaml` | OTLP + syslog sources, unwrap processor -> Bindplane Gateway destination |
 | `bindplane/router.yaml` | routing connector -- splits logs by `attributes["appname"]` |

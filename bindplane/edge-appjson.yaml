@@ -1,0 +1,40 @@
+# Mixed-format JSON app logs -> Dynatrace.
+#
+# No native source covers this shape -- that is the point of the stream, since
+# it gives Pipeline Intelligence something no blueprint already handles. The tcp
+# source's own `parse_format: json` turns the body into structured fields
+# without needing a downstream processor.
+apiVersion: bindplane.observiq.com/v1
+kind: Source
+metadata:
+  name: grrcon-appjson-in
+spec:
+  type: tcp
+  parameters:
+    - name: listen_ip
+      value: "0.0.0.0"
+    - name: listen_port
+      value: 5143
+    - name: log_type
+      value: appjson
+    - name: parse_format
+      value: json
+---
+apiVersion: bindplane.observiq.com/v2
+kind: Configuration
+metadata:
+  name: grrcon-appjson
+  labels:
+    platform: linux
+spec:
+  sources:
+    - id: s-grrcon-appjson-in
+      name: grrcon-appjson-in
+      routes:
+        logs:
+          - id: "0"
+            components:
+              - destinations/d-Dynatrace
+  destinations:
+    - id: d-Dynatrace
+      name: Dynatrace

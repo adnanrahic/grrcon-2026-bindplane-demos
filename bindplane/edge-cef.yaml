@@ -1,0 +1,40 @@
+# CEF -> Splunk HEC.
+#
+# CEF has a native Bindplane source (common_event_format), and like every
+# format-specific source it is file-based -- so blitz writes the file and this
+# collector tails it. Same shape as the Apache pipeline.
+apiVersion: bindplane.observiq.com/v1
+kind: Source
+metadata:
+  name: grrcon-cef-in
+spec:
+  type: common_event_format
+  parameters:
+    - name: file_log_path
+      value:
+        - /logs/cef/events.log
+    - name: log_type
+      value: cef
+    - name: start_at
+      value: end
+    - name: parse
+      value: true
+---
+apiVersion: bindplane.observiq.com/v2
+kind: Configuration
+metadata:
+  name: grrcon-cef
+  labels:
+    platform: linux
+spec:
+  sources:
+    - id: s-grrcon-cef-in
+      name: grrcon-cef-in
+      routes:
+        logs:
+          - id: "0"
+            components:
+              - destinations/d-Splunk-HEC
+  destinations:
+    - id: d-Splunk-HEC
+      name: Splunk-HEC

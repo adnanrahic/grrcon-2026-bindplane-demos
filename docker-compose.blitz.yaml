@@ -45,24 +45,15 @@ x-blitz-common: &blitz-common
   networks:
     - bdot-net
 
-# Every stream ships RFC 5424 syslog to one port on the ingress. blitz hardcodes
-# service.name="blitz" on OTLP output and offers no way to override it, so OTLP
-# leaves all five streams indistinguishable. Syslog carries a per-stream APPNAME,
-# which the collector parses into an attribute the routing connector can match.
-x-blitz-syslog-env: &blitz-syslog-env
-  BLITZ_OUTPUT_TYPE: syslog
-  BLITZ_OUTPUT_SYSLOG_HOST: ${COLLECTOR_HOST:-bdot-ingress}
-  BLITZ_OUTPUT_SYSLOG_PORT: ${SYSLOG_PORT:-5140}
-  BLITZ_OUTPUT_SYSLOG_TRANSPORT: ${SYSLOG_TRANSPORT:-udp}
-  # RFC 3164, not 5424. blitz formats 5424 timestamps with time.RFC3339Nano
-  # (9 fractional digits); RFC 5424 permits at most 6, so the collector's
-  # syslog parser rejects every record with
-  #   "expecting a RFC3339MICRO timestamp or a nil value [col 32]"
-  # and passes the raw line through UNPARSED -- appname never exists and all
-  # routing falls through to the catch-all. 3164 uses "Jan _2 15:04:05" with no
-  # fractional seconds, so it parses cleanly. Cost: no sub-second precision in
-  # the syslog header (the message body keeps its own timestamps).
-  BLITZ_OUTPUT_SYSLOG_RFC: "3164"
+# Each stream now goes to its OWN edge collector, so nothing needs an APPNAME to
+# tell streams apart -- the collector a stream lands on IS its identity, and each
+# source stamps its own log_type. Raw TCP carries the generator's line verbatim
+# (blitz appends a newline, which tcplog framing needs); the two streams with a
+# native file-based source write files instead.
+# file-based source write files instead.
+x-blitz-tcp-env: &blitz-tcp-env
+  BLITZ_OUTPUT_TYPE: tcp
+  BLITZ_OUTPUT_TCP_WORKERS: "1"
   BLITZ_LOGGING_LEVEL: ${BLITZ_LOG_LEVEL:-info}
 
 services:
@@ -76,9 +67,9 @@ services:
     <<: *blitz-common
     container_name: blitz-winsec
     environment:
-      <<: *blitz-syslog-env
-      BLITZ_OUTPUT_SYSLOG_APPNAME: winsec
-      BLITZ_OUTPUT_SYSLOG_HOSTNAME: dc01.contoso.local
+      <<: *blitz-tcp-env
+      BLITZ_OUTPUT_TCP_HOST: bdot-winsec
+      BLITZ_OUTPUT_TCP_PORT: "5142"
       BLITZ_GENERATOR_TYPE: filegen
       BLITZ_GENERATOR_FILEGEN_SOURCE: /samples/winsec.xml
       BLITZ_GENERATOR_FILEGEN_WORKERS: ${WINSEC_WORKERS:-2}
@@ -106,8 +97,8 @@ services:
       # framing needs, and there is no datagram loss.
       BLITZ_LOGGING_LEVEL: ${BLITZ_LOG_LEVEL:-info}
       BLITZ_OUTPUT_TYPE: tcp
-      BLITZ_OUTPUT_TCP_HOST: ${COLLECTOR_HOST:-bdot-ingress}
-      BLITZ_OUTPUT_TCP_PORT: ${PANOS_TCP_PORT:-5141}
+      BLITZ_OUTPUT_TCP_HOST: bdot-panos
+      BLITZ_OUTPUT_TCP_PORT: "5141"
       BLITZ_OUTPUT_TCP_WORKERS: "1"
       BLITZ_GENERATOR_TYPE: filegen
       BLITZ_GENERATOR_FILEGEN_SOURCE: "package:palo-alto/csv"
@@ -124,9 +115,9 @@ services:
     <<: *blitz-common
     container_name: blitz-json
     environment:
-      <<: *blitz-syslog-env
-      BLITZ_OUTPUT_SYSLOG_APPNAME: appjson
-      BLITZ_OUTPUT_SYSLOG_HOSTNAME: app-worker-01
+      <<: *blitz-tcp-env
+      BLITZ_OUTPUT_TCP_HOST: bdot-appjson
+      BLITZ_OUTPUT_TCP_PORT: "5143"
       BLITZ_GENERATOR_TYPE: json
       BLITZ_GENERATOR_JSON_TYPE: default
       BLITZ_GENERATOR_JSON_WORKERS: ${JSON_WORKERS:-1}
@@ -140,46 +131,23 @@ services:
   blitz-cef:
     <<: *blitz-common
     container_name: blitz-cef
+    user: "10005:10005"
     environment:
-      <<: *blitz-syslog-env
-      BLITZ_OUTPUT_SYSLOG_APPNAME: cef
-      BLITZ_OUTPUT_SYSLOG_HOSTNAME: siem-edge-01
+      BLITZ_LOGGING_LEVEL: ${BLITZ_LOG_LEVEL:-info}
+      BLITZ_OUTPUT_TYPE: file
+      BLITZ_OUTPUT_FILE_PATH: /logs/cef/events.log
+      BLITZ_OUTPUT_FILE_WORKERS: "1"
+      BLITZ_OUTPUT_FILE_ROTATION_COMPRESS: "false"
       BLITZ_GENERATOR_TYPE: filegen
       BLITZ_GENERATOR_FILEGEN_SOURCE: "package:universal-cef"
       BLITZ_GENERATOR_FILEGEN_WORKERS: ${CEF_WORKERS:-1}
       BLITZ_GENERATOR_FILEGEN_RATE: ${CEF_RATE:-1s}
       BLITZ_DATA_LIBRARY_DIR: /data_library
     volumes:
+      - ./logs:/logs
       - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
 
-  # 5. Apache web-server access logs -- feeds the Apache/NGINX Full-Pipeline
-  #    Blueprint, which otherwise has no data to work on.
-  #
-  #    Two caveats, both properties of the upstream package:
-  #    - The lines are NOT Common Log Format. They are syslog-wrapped
-  #      (<86> priority, timestamp, host, `httpd:` tag) and carry TWO leading
-  #      IPs plus trailing referer/user-agent -- i.e. Combined, not Common.
-  #    - 1 of the 5 lines is an sshd/pam_vas auth record, not an httpd log,
-  #      so roughly 20% of this stream is not a web request at all.
-  #    Swap BLITZ_GENERATOR_FILEGEN_SOURCE to package:nginx for the same
-  #    shape from NGINX, or point at a local file under ./samples for a
-  #    hand-tuned Common Log Format mix.
-  blitz-apache:
-    <<: *blitz-common
-    container_name: blitz-apache
-    environment:
-      <<: *blitz-syslog-env
-      BLITZ_OUTPUT_SYSLOG_APPNAME: apache
-      BLITZ_OUTPUT_SYSLOG_HOSTNAME: apache.httpserver.test
-      BLITZ_GENERATOR_TYPE: filegen
-      BLITZ_GENERATOR_FILEGEN_SOURCE: "package:apache"
-      BLITZ_GENERATOR_FILEGEN_WORKERS: ${APACHE_WORKERS:-1}
-      BLITZ_GENERATOR_FILEGEN_RATE: ${APACHE_RATE:-1s}
-      BLITZ_DATA_LIBRARY_DIR: /data_library
-    volumes:
-      - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
-
-  # 6. Apache access logs in NATIVE Common Log Format, written to a file.
+  # 5. Apache access logs in NATIVE Common Log Format, written to a file.
   #
   #    This is the only stream that does not go over syslog, and deliberately
   #    so. Bindplane's format-specific log sources (apache_common, nginx, cef,

@@ -1,0 +1,48 @@
+# Windows Security events -> Google SecOps.
+#
+# Windows has no file-based native source: windowsevents_v3 uses the
+# windowseventlog receiver, which reads the Windows Event Log API and cannot run
+# in a Linux container at all. So this uses a generic tcp source.
+#
+# parse_format: none and raw TCP together mean the body is the Windows Event XML
+# exactly as generated -- no syslog header to strip, which is what the SecOps
+# Pipeline Intelligence actions ("Standardize Log Type for SecOps", "Validate
+# SecOps Parser") expect to work on.
+#
+# NOTE: the collector running this config needs credentials.json mounted at
+# /opt/credentials.json -- the chronicle exporter reads it AT STARTUP and the
+# collector fails to start without it.
+apiVersion: bindplane.observiq.com/v1
+kind: Source
+metadata:
+  name: grrcon-winsec-in
+spec:
+  type: tcp
+  parameters:
+    - name: listen_ip
+      value: "0.0.0.0"
+    - name: listen_port
+      value: 5142
+    - name: log_type
+      value: windows_event.security
+    - name: parse_format
+      value: none
+---
+apiVersion: bindplane.observiq.com/v2
+kind: Configuration
+metadata:
+  name: grrcon-winsec
+  labels:
+    platform: linux
+spec:
+  sources:
+    - id: s-grrcon-winsec-in
+      name: grrcon-winsec-in
+      routes:
+        logs:
+          - id: "0"
+            components:
+              - destinations/d-Google-SecOps-Linux
+  destinations:
+    - id: d-Google-SecOps-Linux
+      name: Google-SecOps-Linux

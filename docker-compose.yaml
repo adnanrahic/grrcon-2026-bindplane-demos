@@ -43,8 +43,6 @@ services:
     ports:
       - "4317:4317"   # OTLP gRPC -- external telemetry in
       - "4318:4318"   # OTLP HTTP
-      - "5140:5140/udp" # RFC 3164 syslog -- winsec, appjson, cef, apache
-      - "5141:5141"     # raw TCP -- PAN-OS CSV for the Palo Alto blueprint
       - "13133:13133" # health check
     volumes:
       - bdot-ingress-storage:/etc/otel/storage
@@ -240,9 +238,77 @@ services:
     networks:
       - bdot-net
 
+  bdot-cef:
+    <<: *bdot
+    container_name: bdot-cef
+    hostname: bdot-cef
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T12
+      OPAMP_AGENT_NAME: bdot-cef
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-cef
+    volumes:
+      - bdot-cef-storage:/etc/otel/storage
+      - ./logs:/logs:ro
+    networks:
+      - bdot-net
+
+  bdot-panos:
+    <<: *bdot
+    container_name: bdot-panos
+    hostname: bdot-panos
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T13
+      OPAMP_AGENT_NAME: bdot-panos
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-panos
+    ports:
+      - "5141:5141"
+    volumes:
+      - bdot-panos-storage:/etc/otel/storage
+    networks:
+      - bdot-net
+
+  bdot-winsec:
+    <<: *bdot
+    container_name: bdot-winsec
+    hostname: bdot-winsec
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T14
+      OPAMP_AGENT_NAME: bdot-winsec
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-winsec
+    ports:
+      - "5142:5142"
+    volumes:
+      - bdot-winsec-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      - bdot-net
+
+  bdot-appjson:
+    <<: *bdot
+    container_name: bdot-appjson
+    hostname: bdot-appjson
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T15
+      OPAMP_AGENT_NAME: bdot-appjson
+      OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-appjson
+    ports:
+      - "5143:5143"
+    volumes:
+      - bdot-appjson-storage:/etc/otel/storage
+    networks:
+      - bdot-net
+
 volumes:
   bdot-ingress-storage:
   bdot-apache-storage:
+  bdot-cef-storage:
+  bdot-panos-storage:
+  bdot-winsec-storage:
+  bdot-appjson-storage:
   bdot-01-storage:
   bdot-02-storage:
   bdot-03-storage:

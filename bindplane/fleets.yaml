@@ -33,3 +33,18 @@ spec:
   selector:
     matchLabels:
       fleet: grrcon-ingress
+---
+# The edge tier: one collector per source+destination pipeline. Each has its
+# own configuration, so each can carry a full_pipeline_blueprint for its pair.
+apiVersion: bindplane.observiq.com/v1
+kind: Fleet
+metadata:
+  name: grrcon-edge
+  labels:
+    platform: linux
+    agent-type: observiq-otel-collector
+spec:
+  configuration: ""
+  selector:
+    matchLabels:
+      fleet: grrcon-edge
