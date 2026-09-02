@@ -1,0 +1,142 @@
+# NOTE: Google-SecOps, Elastic, and Dynatrace are destinations that already
+# exist in this Bindplane account, referenced here by name rather than
+# redefined -- so they keep their real credentials. `bindplane apply` against a
+# fresh account would need those three created first.
+#
+# The worker tier: one configuration assigned to all 10 collectors via their
+# `configuration=grrcon-workers` OpAMP label. Staged rollouts target env=canary
+# (bdot-01, bdot-02) and then env=prod (bdot-03..10) WITHIN this one config, so
+# the whole progression shows up on a single config's rollout timeline.
+apiVersion: bindplane.observiq.com/v1
+kind: Source
+metadata:
+  name: grrcon-gateway-in
+spec:
+  type: bindplane_gateway
+  parameters:
+    - name: telemetry_types
+      value:
+        - Logs
+        - Metrics
+        - Traces
+    - name: listen_address
+      value: "0.0.0.0"
+    - name: grpc_port
+      value: 4317
+    - name: http_port
+      value: 4318
+    - name: enable_tls
+      value: false
+---
+# Credential-free terminal destination so the demo runs standalone.
+# SWAP THIS for your real backend (Google Cloud, Splunk, Datadog, S3, ...) --
+# replace the whole resource, or just repoint grrcon-workers' destinations list.
+apiVersion: bindplane.observiq.com/v1
+kind: Destination
+metadata:
+  name: grrcon-debug-out
+spec:
+  type: custom
+  parameters:
+    - name: telemetry_types
+      value:
+        - Logs
+        - Metrics
+        - Traces
+    - name: configuration
+      value: |-
+        debug:
+          verbosity: basic
+          sampling_initial: 5
+          sampling_thereafter: 200
+---
+# Splunk (HEC) -- the SIEM ingest path, where the cost-reduction story lands.
+# NOT the same as the account's existing `Splunk-Cloud`, which is type
+# `signalfx` (Splunk Observability Cloud: metrics/APM, not SIEM log ingest).
+#
+# `token` is REQUIRED and is a placeholder: exports will fail until a real HEC
+# token and hostname are set. Fine while Splunk is a talking point on the
+# pipeline diagram; replace both before sending anything you expect to arrive.
+apiVersion: bindplane.observiq.com/v1
+kind: Destination
+metadata:
+  name: Splunk-HEC
+spec:
+  type: splunkhec_v2
+  parameters:
+    - name: telemetry_types
+      value:
+        - Logs
+    - name: hostname
+      value: REPLACE_ME.splunkcloud.com
+    - name: port
+      value: 8088
+    - name: path
+      value: /services/collector/event
+    - name: token
+      value: REPLACE_ME
+    - name: index_logs
+      value: main
+---
+apiVersion: bindplane.observiq.com/v2
+kind: Configuration
+metadata:
+  name: grrcon-workers
+  labels:
+    platform: linux
+spec:
+  sources:
+    - id: s-grrcon-gateway-in
+      name: grrcon-gateway-in
+      routes:
+        # Logs go through the router, which fans them out by appname.
+        logs:
+          - id: "0"
+            components:
+              - connectors/c-grrcon-router
+        # blitz sends logs only; metrics/traces here are collector self-telemetry.
+        # They bypass the router and land in debug.
+        metrics:
+          - id: "1"
+            components:
+              - destinations/d-grrcon-debug-out
+        traces:
+          - id: "2"
+            components:
+              - destinations/d-grrcon-debug-out
+  connectors:
+    - id: c-grrcon-router
+      name: grrcon-router
+      routes:
+        logs:
+          # Route ids MUST match the route ids in bindplane/router.yaml.
+          - id: winsec
+            components:
+              - destinations/d-Google-SecOps-Linux
+          - id: paloalto
+            components:
+              - destinations/d-Dynatrace
+          - id: appjson
+            components:
+              - destinations/d-Dynatrace
+          - id: apache
+            components:
+              - destinations/d-Elastic
+          - id: cef
+            components:
+              - destinations/d-Splunk-HEC
+          # Catch-all. Traffic here means an appname stopped matching.
+          - id: unmatched
+            components:
+              - destinations/d-grrcon-debug-out
+  destinations:
+    - id: d-Google-SecOps-Linux
+      name: Google-SecOps-Linux
+    - id: d-Dynatrace
+      name: Dynatrace
+    - id: d-Elastic
+      name: Elastic
+    - id: d-Splunk-HEC
+      name: Splunk-HEC
+    - id: d-grrcon-debug-out
+      name: grrcon-debug-out

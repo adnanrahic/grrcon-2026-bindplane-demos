@@ -1,0 +1,84 @@
+# Front door: accepts OTLP from anything on the host, fans it out across the
+# 10-worker pool. Assigned to bdot-ingress via its `configuration=grrcon-ingress`
+# OpAMP label, so it self-assigns the moment the container registers.
+apiVersion: bindplane.observiq.com/v1
+kind: Source
+metadata:
+  name: grrcon-otlp-in
+spec:
+  type: otlp
+  parameters:
+    - name: telemetry_types
+      value:
+        - Logs
+        - Metrics
+        - Traces
+    - name: listen_address
+      value: "0.0.0.0"
+    - name: grpc_port
+      value: 4317
+    - name: http_port
+      value: 4318
+    - name: enable_tls
+      value: false
+---
+# RFC 5424 syslog on 5140/udp. Every blitz stream arrives here with a distinct
+# APPNAME, which the collector parses into an attribute -- that attribute is what
+# the worker-tier routing connector splits on. OTLP stays enabled alongside it
+# for anything that speaks OTLP natively.
+apiVersion: bindplane.observiq.com/v1
+kind: Source
+metadata:
+  name: grrcon-syslog-in
+spec:
+  type: syslog
+  parameters:
+    - name: listen_ip
+      value: "0.0.0.0"
+    - name: listen_port
+      value: 5140
+    - name: protocol
+      value: rfc3164
+    - name: connection_type
+      value: udp
+---
+# `bdot-pool` is a Docker network alias shared by all 10 workers, so this one
+# hostname resolves to 10 container IPs. enable_grpc_load_balancing makes the
+# client spread connections across every resolved address instead of pinning
+# to whichever IP it saw first -- without it, one worker takes all the traffic.
+apiVersion: bindplane.observiq.com/v1
+kind: Destination
+metadata:
+  name: grrcon-worker-pool
+spec:
+  type: bindplane_gateway
+  parameters:
+    - name: hostname
+      value: bdot-pool
+    - name: protocol
+      value: grpc
+    - name: grpc_port
+      value: 4317
+    - name: enable_tls
+      value: false
+    - name: grpc_compression
+      value: gzip
+    - name: enable_grpc_load_balancing
+      value: true
+    - name: grpc_load_balancing_policy
+      value: round_robin
+    - name: retry_on_failure_enabled
+      value: true
+---
+apiVersion: bindplane.observiq.com/v2
+kind: Configuration
+metadata:
+  name: grrcon-ingress
+  labels:
+    platform: linux
+spec:
+  sources:
+    - name: grrcon-otlp-in
+    - name: grrcon-syslog-in
+  destinations:
+    - name: grrcon-worker-pool

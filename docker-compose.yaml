@@ -1,0 +1,234 @@
+# GrrCON demo: a Bindplane-managed gateway topology.
+#
+#   your app / otel-cli -> localhost:4317 -> bdot-ingress -> bdot-pool:4317 -> one of bdot-01..10
+#
+# All 11 collectors are managed from Bindplane Cloud over OpAMP; nothing here
+# defines a pipeline. Pipelines live in bindplane/ and are applied separately.
+#
+# The 10 workers share the network alias `bdot-pool`. Docker's embedded DNS
+# returns all 10 container IPs for that one name, so the ingress destination
+# points at a single hostname with gRPC load balancing on and the pool can grow
+# or shrink without touching the Bindplane config.
+#
+# Only bdot-ingress publishes ports. The workers listen on 4317 inside bdot-net
+# only -- one door in, ten collectors behind it.
+
+x-bdot: &bdot
+  image: ghcr.io/observiq/bindplane-agent:${BDOT_VERSION:-1.106.0}
+  restart: unless-stopped
+
+x-bdot-env: &bdot-env
+  OPAMP_ENDPOINT: ${OPAMP_ENDPOINT:-wss://app.bindplane.com/v1/opamp}
+  OPAMP_SECRET_KEY: ${BINDPLANE_SECRET_KEY:?set BINDPLANE_SECRET_KEY in .env -- copy .env.example}
+  MANAGER_YAML_PATH: /etc/otel/storage/manager.yaml
+
+networks:
+  bdot-net:
+    name: bdot-net
+
+services:
+
+  # The only collector reachable from the host. Deliberately labeled
+  # role=ingress and NOT env=canary/env=prod, so a staged worker rollout
+  # targeting env= can never take the front door down with it.
+  bdot-ingress:
+    <<: *bdot
+    container_name: bdot-ingress
+    hostname: bdot-ingress
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T00
+      OPAMP_AGENT_NAME: bdot-ingress
+      OPAMP_LABELS: fleet=grrcon-ingress,role=ingress,configuration=grrcon-ingress
+    ports:
+      - "4317:4317"   # OTLP gRPC -- external telemetry in
+      - "4318:4318"   # OTLP HTTP
+      - "5140:5140/udp" # RFC 5424 syslog -- every blitz stream
+      - "13133:13133" # health check
+    volumes:
+      - bdot-ingress-storage:/etc/otel/storage
+    networks:
+      - bdot-net
+
+  bdot-01:
+    <<: *bdot
+    container_name: bdot-01
+    hostname: bdot-01
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T01
+      OPAMP_AGENT_NAME: bdot-01
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=canary,configuration=grrcon-workers
+    volumes:
+      - bdot-01-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+  bdot-02:
+    <<: *bdot
+    container_name: bdot-02
+    hostname: bdot-02
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T02
+      OPAMP_AGENT_NAME: bdot-02
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=canary,configuration=grrcon-workers
+    volumes:
+      - bdot-02-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+  bdot-03:
+    <<: *bdot
+    container_name: bdot-03
+    hostname: bdot-03
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T03
+      OPAMP_AGENT_NAME: bdot-03
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+    volumes:
+      - bdot-03-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+  bdot-04:
+    <<: *bdot
+    container_name: bdot-04
+    hostname: bdot-04
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T04
+      OPAMP_AGENT_NAME: bdot-04
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+    volumes:
+      - bdot-04-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+  bdot-05:
+    <<: *bdot
+    container_name: bdot-05
+    hostname: bdot-05
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T05
+      OPAMP_AGENT_NAME: bdot-05
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+    volumes:
+      - bdot-05-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+  bdot-06:
+    <<: *bdot
+    container_name: bdot-06
+    hostname: bdot-06
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T06
+      OPAMP_AGENT_NAME: bdot-06
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+    volumes:
+      - bdot-06-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+  bdot-07:
+    <<: *bdot
+    container_name: bdot-07
+    hostname: bdot-07
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T07
+      OPAMP_AGENT_NAME: bdot-07
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+    volumes:
+      - bdot-07-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+  bdot-08:
+    <<: *bdot
+    container_name: bdot-08
+    hostname: bdot-08
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T08
+      OPAMP_AGENT_NAME: bdot-08
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+    volumes:
+      - bdot-08-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+  bdot-09:
+    <<: *bdot
+    container_name: bdot-09
+    hostname: bdot-09
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T09
+      OPAMP_AGENT_NAME: bdot-09
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+    volumes:
+      - bdot-09-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+  bdot-10:
+    <<: *bdot
+    container_name: bdot-10
+    hostname: bdot-10
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T10
+      OPAMP_AGENT_NAME: bdot-10
+      OPAMP_LABELS: fleet=grrcon,role=worker,env=prod,configuration=grrcon-workers
+    volumes:
+      - bdot-10-storage:/etc/otel/storage
+      - ./credentials.json:/opt/credentials.json:ro
+    networks:
+      bdot-net:
+        aliases:
+          - bdot-pool
+
+volumes:
+  bdot-ingress-storage:
+  bdot-01-storage:
+  bdot-02-storage:
+  bdot-03-storage:
+  bdot-04-storage:
+  bdot-05-storage:
+  bdot-06-storage:
+  bdot-07-storage:
+  bdot-08-storage:
+  bdot-09-storage:
+  bdot-10-storage:

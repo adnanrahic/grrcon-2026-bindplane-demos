@@ -1,0 +1,171 @@
+# GrrCON demo telemetry sources — the streams from plan.md, plus a CEF feed.
+#
+#   1. Windows Security events  -> replayed sample set, 4624-heavy (filegen)
+#   2. Palo Alto threat/traffic -> PAN-OS CSV at a steady rate    (filegen)
+#   3. Mixed-format JSON app log-> no blueprint covers it         (json)
+#   4. Universal CEF            -> exercises the CEF parser       (filegen)
+#
+# These are data sources only. They feed the gateway topology in
+# docker-compose.yaml by sending OTLP to bdot-ingress:4317 over bdot-net,
+# exactly as an external app would. Bring the collectors up first:
+#
+#   docker compose up -d                              # the 11 collectors
+#   docker compose -f docker-compose.blitz.yaml up -d  # the three streams
+#   docker compose -f docker-compose.blitz.yaml logs -f blitz-winsec
+#
+# `bdot-net` is declared external here on purpose: this stack attaches to
+# the collector topology's network, it never creates it.
+#
+# Send Palo Alto over syslog instead of OTLP (needs a syslog receiver on
+# the ingress collector, configured in Bindplane):
+#
+#   docker compose -f docker-compose.blitz.yaml --profile syslog up -d
+#   docker compose -f docker-compose.blitz.yaml stop blitz-palo-alto
+#
+# The blitz image is FROM scratch and ships ONLY the binary — no data
+# library — so the Palo Alto samples are bind-mounted from the blitz repo.
+# Set BLITZ_REPO if that clone is not a sibling of this directory.
+#
+# Tunables (all optional, override in .env or the environment):
+#   BLITZ_REPO=../blitz   WINSEC_RATE=150ms   WINSEC_WORKERS=2
+#   PAN_RATE=500ms        PAN_WORKERS=2       JSON_RATE=1s   JSON_WORKERS=1
+#   CEF_RATE=1s           CEF_WORKERS=1
+#   APACHE_RATE=1s        APACHE_WORKERS=1
+#   COLLECTOR_HOST=bdot-ingress               BLITZ_LOG_LEVEL=info
+
+# Own project name so this stack and the collector stack stay separate --
+# without it both default to the directory name and every blitz command warns
+# about the 11 collectors as "orphan containers".
+name: grrcon-blitz
+
+x-blitz-common: &blitz-common
+  image: ghcr.io/observiq/blitz:${BLITZ_VERSION:-latest}
+  restart: unless-stopped
+  networks:
+    - bdot-net
+
+# Every stream ships RFC 5424 syslog to one port on the ingress. blitz hardcodes
+# service.name="blitz" on OTLP output and offers no way to override it, so OTLP
+# leaves all five streams indistinguishable. Syslog carries a per-stream APPNAME,
+# which the collector parses into an attribute the routing connector can match.
+x-blitz-syslog-env: &blitz-syslog-env
+  BLITZ_OUTPUT_TYPE: syslog
+  BLITZ_OUTPUT_SYSLOG_HOST: ${COLLECTOR_HOST:-bdot-ingress}
+  BLITZ_OUTPUT_SYSLOG_PORT: ${SYSLOG_PORT:-5140}
+  BLITZ_OUTPUT_SYSLOG_TRANSPORT: ${SYSLOG_TRANSPORT:-udp}
+  # RFC 3164, not 5424. blitz formats 5424 timestamps with time.RFC3339Nano
+  # (9 fractional digits); RFC 5424 permits at most 6, so the collector's
+  # syslog parser rejects every record with
+  #   "expecting a RFC3339MICRO timestamp or a nil value [col 32]"
+  # and passes the raw line through UNPARSED -- appname never exists and all
+  # routing falls through to the catch-all. 3164 uses "Jan _2 15:04:05" with no
+  # fractional seconds, so it parses cleanly. Cost: no sub-second precision in
+  # the syslog header (the message body keeps its own timestamps).
+  BLITZ_OUTPUT_SYSLOG_RFC: "3164"
+  BLITZ_LOGGING_LEVEL: ${BLITZ_LOG_LEVEL:-info}
+
+services:
+
+  # 1. Windows Security events, replayed from samples/winsec.xml.
+  #    filegen picks ONE RANDOM LINE per cycle, so the file's line mix
+  #    (52x 4624 / 6x 4625 / 6x 4688 / 3x 4740) is the mix on the wire:
+  #    ~78% benign successful logons burying the events that matter.
+  #    Retune the ratio with samples/generate-winsec.sh.
+  blitz-winsec:
+    <<: *blitz-common
+    container_name: blitz-winsec
+    environment:
+      <<: *blitz-syslog-env
+      BLITZ_OUTPUT_SYSLOG_APPNAME: winsec
+      BLITZ_OUTPUT_SYSLOG_HOSTNAME: dc01.contoso.local
+      BLITZ_GENERATOR_TYPE: filegen
+      BLITZ_GENERATOR_FILEGEN_SOURCE: /samples/winsec.xml
+      BLITZ_GENERATOR_FILEGEN_WORKERS: ${WINSEC_WORKERS:-2}
+      BLITZ_GENERATOR_FILEGEN_RATE: ${WINSEC_RATE:-150ms}
+    volumes:
+      - ./samples:/samples:ro
+
+  # 2. Palo Alto — full-width PAN-OS CSV across 14 log types (threat,
+  #    traffic, system, globalprotect, userid, ...). Native PAN-OS format,
+  #    which is what the PAN blueprint parses. See the CEF note below.
+  blitz-palo-alto:
+    <<: *blitz-common
+    container_name: blitz-palo-alto
+    environment:
+      <<: *blitz-syslog-env
+      BLITZ_OUTPUT_SYSLOG_APPNAME: paloalto
+      BLITZ_OUTPUT_SYSLOG_HOSTNAME: pan-fw-01
+      BLITZ_GENERATOR_TYPE: filegen
+      BLITZ_GENERATOR_FILEGEN_SOURCE: "package:palo-alto/csv"
+      BLITZ_GENERATOR_FILEGEN_WORKERS: ${PAN_WORKERS:-2}
+      BLITZ_GENERATOR_FILEGEN_RATE: ${PAN_RATE:-500ms}
+      BLITZ_DATA_LIBRARY_DIR: /data_library
+    volumes:
+      - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
+
+  # 3. Mixed-format app log — a JSON envelope wrapping an unstructured
+  #    key=value message body. No blueprint covers this shape, so
+  #    Pipeline Intelligence gets a real job.
+  blitz-json:
+    <<: *blitz-common
+    container_name: blitz-json
+    environment:
+      <<: *blitz-syslog-env
+      BLITZ_OUTPUT_SYSLOG_APPNAME: appjson
+      BLITZ_OUTPUT_SYSLOG_HOSTNAME: app-worker-01
+      BLITZ_GENERATOR_TYPE: json
+      BLITZ_GENERATOR_JSON_TYPE: default
+      BLITZ_GENERATOR_JSON_WORKERS: ${JSON_WORKERS:-1}
+      BLITZ_GENERATOR_JSON_RATE: ${JSON_RATE:-1s}
+
+  # 4. Universal CEF — vendor-neutral CEF:0 records (IDS, WAF, EDR, IdP,
+  #    DLP, container runtime). Bare CEF with no syslog wrapper, which is
+  #    exactly what a CEF parser wants to chew on. Small pool: 8 static
+  #    lines, no timestamp directives, so the collector stamps observed
+  #    time. Fine for parser exercise, repetitive as a volume source.
+  blitz-cef:
+    <<: *blitz-common
+    container_name: blitz-cef
+    environment:
+      <<: *blitz-syslog-env
+      BLITZ_OUTPUT_SYSLOG_APPNAME: cef
+      BLITZ_OUTPUT_SYSLOG_HOSTNAME: siem-edge-01
+      BLITZ_GENERATOR_TYPE: filegen
+      BLITZ_GENERATOR_FILEGEN_SOURCE: "package:universal-cef"
+      BLITZ_GENERATOR_FILEGEN_WORKERS: ${CEF_WORKERS:-1}
+      BLITZ_GENERATOR_FILEGEN_RATE: ${CEF_RATE:-1s}
+      BLITZ_DATA_LIBRARY_DIR: /data_library
+    volumes:
+      - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
+
+  # 5. Apache web-server access logs -- feeds the Apache/NGINX Full-Pipeline
+  #    Blueprint, which otherwise has no data to work on.
+  #
+  #    Two caveats, both properties of the upstream package:
+  #    - The lines are NOT Common Log Format. They are syslog-wrapped
+  #      (<86> priority, timestamp, host, `httpd:` tag) and carry TWO leading
+  #      IPs plus trailing referer/user-agent -- i.e. Combined, not Common.
+  #    - 1 of the 5 lines is an sshd/pam_vas auth record, not an httpd log,
+  #      so roughly 20% of this stream is not a web request at all.
+  #    Swap BLITZ_GENERATOR_FILEGEN_SOURCE to package:nginx for the same
+  #    shape from NGINX, or point at a local file under ./samples for a
+  #    hand-tuned Common Log Format mix.
+  blitz-apache:
+    <<: *blitz-common
+    container_name: blitz-apache
+    environment:
+      <<: *blitz-syslog-env
+      BLITZ_OUTPUT_SYSLOG_APPNAME: apache
+      BLITZ_OUTPUT_SYSLOG_HOSTNAME: apache.httpserver.test
+      BLITZ_GENERATOR_TYPE: filegen
+      BLITZ_GENERATOR_FILEGEN_SOURCE: "package:apache"
+      BLITZ_GENERATOR_FILEGEN_WORKERS: ${APACHE_WORKERS:-1}
+      BLITZ_GENERATOR_FILEGEN_RATE: ${APACHE_RATE:-1s}
+      BLITZ_DATA_LIBRARY_DIR: /data_library
+    volumes:
+      - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
+
+networks:
+  bdot-net:
+    external: true
+    name: ${COLLECTOR_NETWORK:-bdot-net}

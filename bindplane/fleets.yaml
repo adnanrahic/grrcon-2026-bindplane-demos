@@ -1,0 +1,35 @@
+# Two fleets. A collector can belong to exactly one fleet at a time, so the
+# ingress is *moved* out of grrcon rather than added to a second fleet --
+# `fleet=` is the one label on these collectors that is mutually exclusive.
+#
+# Membership is driven from the collector side: each container reports a
+# `fleet=` OpAMP label (see docker-compose.yaml) and the selector below claims
+# every collector carrying it.
+apiVersion: bindplane.observiq.com/v1
+kind: Fleet
+metadata:
+  name: grrcon
+  labels:
+    platform: linux
+    agent-type: observiq-otel-collector
+spec:
+  configuration: ""
+  selector:
+    matchLabels:
+      fleet: grrcon
+---
+# The ingress sits alone here so it can be operated -- upgraded, restarted,
+# rolled -- without touching the worker pool, and so fleet-wide actions aimed
+# at the workers can never reach the front door.
+apiVersion: bindplane.observiq.com/v1
+kind: Fleet
+metadata:
+  name: grrcon-ingress
+  labels:
+    platform: linux
+    agent-type: observiq-otel-collector
+spec:
+  configuration: ""
+  selector:
+    matchLabels:
+      fleet: grrcon-ingress
