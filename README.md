@@ -21,9 +21,8 @@ demonstrates fleet management, but no longer carries blitz log traffic.
 
   apache (file) ┐
   cef (file)    │
-  OTLP :4317/8  ├─▶ bdot-ingress ─▶ bdot-pool ─▶ router ─▶ the five backends
-  panos  :5141  │                  (bdot-01..10)
-  winsec :5142  │
+  panos  :5141  ├─▶ bdot-ingress ─▶ bdot-pool ─▶ router ─▶ the five backends
+  winsec :5142  │                  (bdot-01..10)
   appjson:5143  ┘
 ```
 
@@ -54,8 +53,14 @@ Add or remove workers and the Bindplane config never changes.
 instead. blitz reaches them by container name on `bdot-net`, so the published
 ports exist only so you can send test traffic from the laptop.
 
-**The gateway tier still publishes 4317/4318** for anything speaking OTLP. The
-workers listen on 4317 inside `bdot-net` only.
+**The gateway tier is logs-only.** The OTLP source was removed once nothing used
+it, so the ingress publishes only 13133 (health). Every native source is
+logs-only, and the worker gateway source is now `telemetry_types: [Logs]` — which
+also stops v2 auto-generating metrics/traces routes to every destination.
+
+Re-adding OTLP means restoring three things together: the source and its route,
+the 4317/4318 ports on `bdot-ingress`, and `Metrics`/`Traces` on the worker
+gateway source.
 
 **The ingress lives in its own fleet.** A collector can belong to exactly one
 fleet at a time, so `fleet=` is the one mutually exclusive label here: the

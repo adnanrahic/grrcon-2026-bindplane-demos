@@ -1,33 +1,15 @@
-# The ingress is the native ingestion point for the whole demo: OTLP plus all
-# five native sources (two tailing files, three listening on tcp). EVERYTHING
-# leaves through the Bindplane Gateway destination to bdot-pool -- the worker
-# tier does the fan-out to the real backends via its routing connector.
+# The ingress is the native ingestion point: two file-tailing sources and three
+# tcp listeners. Everything leaves through the Bindplane Gateway destination to
+# bdot-pool -- the worker tier fans out to the real backends via its routing
+# connector.
+#
+# Logs only. The OTLP source was removed once nothing used it; the native
+# sources here are all logs-only, so this tier carries no metrics or traces.
+# Re-adding OTLP means restoring its source, the 4317/4318 ports on the
+# container, and the metrics/traces routes on the worker gateway source.
 #
 # These Source resources are shared with the five edge collectors, which keep
-# their own direct-to-destination pipelines. Two collectors tailing one file is
-# fine (each keeps its own checkpoint); the tcp sources here stay idle unless a
-# generator targets the ingress, since blitz has one output per process.
----
-apiVersion: bindplane.observiq.com/v1
-kind: Source
-metadata:
-  name: grrcon-otlp-in
-spec:
-  type: otlp
-  parameters:
-  - name: telemetry_types
-    value:
-    - Logs
-    - Metrics
-    - Traces
-  - name: listen_address
-    value: 0.0.0.0
-  - name: grpc_port
-    value: 4317
-  - name: http_port
-    value: 4318
-  - name: enable_tls
-    value: false
+# their own direct-to-destination pipelines.
 ---
 apiVersion: bindplane.observiq.com/v1
 kind: Destination
@@ -61,53 +43,39 @@ metadata:
     platform: linux
 spec:
   sources:
-  - name: grrcon-otlp-in
-    routes:
-      logs:
-      - id: '0'
-        components:
-        - destinations/d-grrcon-worker-pool
-      metrics:
-      - id: m0
-        components:
-        - destinations/d-grrcon-worker-pool
-      traces:
-      - id: t0
-        components:
-        - destinations/d-grrcon-worker-pool
   - id: s-grrcon-apache-in
     name: grrcon-apache-in
     routes:
       logs:
-      - id: '1'
+      - id: '0'
         components:
         - destinations/d-grrcon-worker-pool
   - id: s-grrcon-cef-in
     name: grrcon-cef-in
     routes:
       logs:
-      - id: '2'
+      - id: '1'
         components:
         - destinations/d-grrcon-worker-pool
   - id: s-grrcon-panos-in
     name: grrcon-panos-in
     routes:
       logs:
-      - id: '3'
+      - id: '2'
         components:
         - destinations/d-grrcon-worker-pool
   - id: s-grrcon-appjson-in
     name: grrcon-appjson-in
     routes:
       logs:
-      - id: '4'
+      - id: '3'
         components:
         - destinations/d-grrcon-worker-pool
   - id: s-grrcon-winsec-in
     name: grrcon-winsec-in
     routes:
       logs:
-      - id: '5'
+      - id: '4'
         components:
         - destinations/d-grrcon-worker-pool
   destinations:
