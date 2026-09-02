@@ -20,10 +20,16 @@ demonstrates fleet management, but no longer carries blitz log traffic.
   forwards EVERYTHING to the pool; the workers do the fan-out.
 
   apache (file) ┐
-  cef (file)    ├─▶ bdot-ingress ─▶ bdot-pool ─▶ router ─▶ the five backends
-  OTLP :4317/8  ┘                  (bdot-01..10)
-  panos/winsec/appjson (tcp 5141-3) also bound here, idle -- see below
+  cef (file)    │
+  OTLP :4317/8  ├─▶ bdot-ingress ─▶ bdot-pool ─▶ router ─▶ the five backends
+  panos  :5141  │                  (bdot-01..10)
+  winsec :5142  │
+  appjson:5143  ┘
 ```
+
+Every stream therefore arrives at its backend **twice** — once via its edge
+collector, once via the gateway path. That is deliberate; see "Duplicate
+generators" below.
 
 Nothing in `docker-compose.yaml` defines a pipeline. The collectors register,
 report their labels, and pull their configuration from Bindplane. Pipelines
@@ -190,14 +196,25 @@ the file-based ones actually dual-ingest:
 |---|---|
 | `grrcon-apache-in` (file) | **receives** — two collectors can tail one file, each keeping its own checkpoint |
 | `grrcon-cef-in` (file) | **receives** — same |
-| `grrcon-panos-in` (tcp) | bound on 5141, idle |
-| `grrcon-winsec-in` (tcp) | bound on 5142, idle |
-| `grrcon-appjson-in` (tcp) | bound on 5143, idle |
+| `grrcon-panos-in` (tcp) | **receives** — via `blitz-palo-alto-gw` |
+| `grrcon-winsec-in` (tcp) | **receives** — via `blitz-winsec-gw` |
+| `grrcon-appjson-in` (tcp) | **receives** — via `blitz-json-gw` |
 
-**blitz supports one output per process**, so a TCP stream can only be sent to
-one target, and each currently goes to its edge collector. To make the ingress
-receive them too you need a duplicate generator per stream pointed at
-`bdot-ingress` — which doubles that stream's volume at its backend.
+### Duplicate generators
+
+**blitz supports one output per process**, so a TCP stream cannot be sent to
+both its edge collector and the ingress. The `*-gw` services are second
+instances of the same generators pointed at `bdot-ingress`:
+
+| Duplicate | Target | Mirrors |
+|---|---|---|
+| `blitz-winsec-gw` | `bdot-ingress:5142` | `blitz-winsec` |
+| `blitz-palo-alto-gw` | `bdot-ingress:5141` | `blitz-palo-alto` |
+| `blitz-json-gw` | `bdot-ingress:5143` | `blitz-json` |
+
+This **doubles** those streams' volume at their backends — each event arrives
+once via the edge collector and once through the pool. The two file streams need
+no duplicate: both collectors tail the same file.
 
 The ingress's TCP ports are deliberately **not published**: `bdot-panos`,
 `bdot-winsec` and `bdot-appjson` already publish 5141/5142/5143, and a second

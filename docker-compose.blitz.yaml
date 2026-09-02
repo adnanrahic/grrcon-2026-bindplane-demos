@@ -180,6 +180,60 @@ services:
     volumes:
       - ./logs:/logs
 
+  # ---------------------------------------------------------------------------
+  # Gateway-path duplicates.
+  #
+  # blitz allows ONE output per process, so a stream cannot be sent to both its
+  # edge collector and the ingress. These three are second instances of the same
+  # generators pointed at bdot-ingress, so the tcp sources on the gateway path
+  # receive data too.
+  #
+  # This deliberately DOUBLES those streams' volume at their backends: each event
+  # arrives once via the edge collector and once via ingress -> pool -> worker.
+  # The two file streams need no duplicate -- both collectors tail one file.
+  # ---------------------------------------------------------------------------
+
+  blitz-winsec-gw:
+    <<: *blitz-common
+    container_name: blitz-winsec-gw
+    environment:
+      <<: *blitz-tcp-env
+      BLITZ_OUTPUT_TCP_HOST: bdot-ingress
+      BLITZ_OUTPUT_TCP_PORT: "5142"
+      BLITZ_GENERATOR_TYPE: filegen
+      BLITZ_GENERATOR_FILEGEN_SOURCE: /samples/winsec.xml
+      BLITZ_GENERATOR_FILEGEN_WORKERS: ${WINSEC_WORKERS:-2}
+      BLITZ_GENERATOR_FILEGEN_RATE: ${WINSEC_RATE:-500ms}
+    volumes:
+      - ./samples:/samples:ro
+
+  blitz-palo-alto-gw:
+    <<: *blitz-common
+    container_name: blitz-palo-alto-gw
+    environment:
+      <<: *blitz-tcp-env
+      BLITZ_OUTPUT_TCP_HOST: bdot-ingress
+      BLITZ_OUTPUT_TCP_PORT: "5141"
+      BLITZ_GENERATOR_TYPE: filegen
+      BLITZ_GENERATOR_FILEGEN_SOURCE: "package:palo-alto/csv"
+      BLITZ_GENERATOR_FILEGEN_WORKERS: ${PAN_WORKERS:-2}
+      BLITZ_GENERATOR_FILEGEN_RATE: ${PAN_RATE:-500ms}
+      BLITZ_DATA_LIBRARY_DIR: /data_library
+    volumes:
+      - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
+
+  blitz-json-gw:
+    <<: *blitz-common
+    container_name: blitz-json-gw
+    environment:
+      <<: *blitz-tcp-env
+      BLITZ_OUTPUT_TCP_HOST: bdot-ingress
+      BLITZ_OUTPUT_TCP_PORT: "5143"
+      BLITZ_GENERATOR_TYPE: json
+      BLITZ_GENERATOR_JSON_TYPE: default
+      BLITZ_GENERATOR_JSON_WORKERS: ${JSON_WORKERS:-1}
+      BLITZ_GENERATOR_JSON_RATE: ${JSON_RATE:-1s}
+
 networks:
   bdot-net:
     external: true
