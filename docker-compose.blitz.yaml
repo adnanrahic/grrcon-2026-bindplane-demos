@@ -174,11 +174,16 @@ services:
       BLITZ_GENERATOR_APACHE_COMMON_WORKERS: ${APACHE_NATIVE_WORKERS:-1}
       BLITZ_GENERATOR_APACHE_COMMON_RATE: ${APACHE_NATIVE_RATE:-1s}
       BLITZ_OUTPUT_TYPE: file
-      BLITZ_OUTPUT_FILE_PATH: /logs/apache/access.log
+      BLITZ_OUTPUT_FILE_PATH: /var/log/apache2/access.log
       BLITZ_OUTPUT_FILE_WORKERS: "1"
       BLITZ_OUTPUT_FILE_ROTATION_COMPRESS: "false"
     volumes:
-      - ./logs:/logs
+      # /var/log/apache2/access.log is the path the Apache source and the
+      # elasticsearch-apache-common blueprint default to, so write there rather
+      # than somewhere bespoke. Only the apache2 subdirectory is mounted -- the
+      # collector image has real content in /var/log (apt, dpkg) that a mount
+      # over the whole directory would hide.
+      - ./logs/apache2:/var/log/apache2
 
   # ---------------------------------------------------------------------------
   # Gateway-path duplicates.

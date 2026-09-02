@@ -1,3 +1,6 @@
+# /var/log/apache2/access.log is the default path for the Apache source and for
+# the elasticsearch-apache-common blueprint, so blitz writes there.
+#
 # `file_path` is the EXACT file, not a glob. lumberjack rotates to siblings like
 # access-2026-09-02T....log; a glob would tail those too and re-read history.
 apiVersion: bindplane.observiq.com/v1
@@ -9,7 +12,7 @@ spec:
   parameters:
     - name: file_path
       value:
-        - /logs/apache/access.log
+        - /var/log/apache2/access.log
     - name: start_at
       value: end
     - name: parse

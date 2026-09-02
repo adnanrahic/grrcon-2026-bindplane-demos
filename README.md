@@ -132,8 +132,15 @@ only**; the ingress has no SecOps exporter and does not get it.
 `blitz-apache-native` writes native CLF here and `bdot-apache` tails it:
 
 ```bash
-mkdir -p logs/apache logs/cef && chmod 777 logs/apache logs/cef
+mkdir -p logs/apache2 logs/cef && chmod 777 logs/apache2 logs/cef
 ```
+
+`logs/apache2` is mounted at **`/var/log/apache2`** inside the containers —
+the default path for the Apache source and for the
+`elasticsearch-apache-common-full-pipeline` blueprint, so the blueprint works
+without repointing it. Only that subdirectory is mounted: the collector image
+has real content in `/var/log` (apt, dpkg) that a mount over the whole directory
+would hide.
 
 The mode matters — see the permissions trap under "Native formats". After the
 first run, also `chmod 644 logs/*/*.log`: blitz creates files `0600` and the
@@ -560,7 +567,7 @@ with a native file-based source write files instead. See "Native formats" for wh
 | `blitz-palo-alto` | tcp | `bdot-panos:5141` | `filegen` | `package:palo-alto/csv` | 500ms | 2 |
 | `blitz-json` | tcp | `bdot-appjson:5143` | `json` | `default`, synthesized | 1s | 1 |
 | `blitz-cef` | file | `/logs/cef/events.log` | `filegen` | `package:universal-cef` | 1s | 1 |
-| `blitz-apache-native` | file | `/logs/apache/access.log` | `apache-common` | generated | 1s | 1 |
+| `blitz-apache-native` | file | `/var/log/apache2/access.log` | `apache-common` | generated | 1s | 1 |
 
 
 `blitz-apache` (the old `filegen` + `package:apache` service) has been removed:
@@ -707,8 +714,8 @@ output writes it byte-for-byte with no wrapper:
 124.159.111.209 - - [02/Sep/2026:12:16:27 +0000] "DELETE /api/v1/products HTTP/1.1" 200 9482648
 ```
 
-`bdot-apache` (a 12th collector, fleet `grrcon-edge`) tails
-`/logs/apache/access.log` with the `apache_common` source and ships **straight
+`bdot-apache` (fleet `grrcon-edge`) tails `/var/log/apache2/access.log` with the
+`apache_common` source and ships **straight
 to Elastic**, bypassing the worker pool — which is what makes this path additive:
 the ingress, workers and router are untouched by it.
 
@@ -882,7 +889,7 @@ docker compose down -v                             # agents reconnect with same 
 | `.env` | secret key and endpoint -- gitignored, never commit |
 | `.env.example` | template |
 | `credentials.json` | dummy SecOps service account -- gitignored, generate per step 2 |
-| `logs/` | native-format files written by blitz, tailed by the edge collectors -- gitignored |
+| `logs/apache2/`, `logs/cef/` | native-format files written by blitz, tailed by the collectors -- gitignored |
 | `bindplane/edge-apache.yaml` | `apache_common` (file) -> Elastic |
 | `bindplane/edge-cef.yaml` | `common_event_format` (file) -> Splunk HEC |
 | `bindplane/edge-panos.yaml` | `tcp` :5141 -> Dynatrace |

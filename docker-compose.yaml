@@ -47,7 +47,8 @@ services:
       # The ingress ingests the native file streams itself, tailing the same
       # files as bdot-apache/bdot-cef. No credentials mount: everything leaves
       # via the worker pool, so the ingress has no SecOps exporter of its own.
-      - ./logs:/logs:ro
+      - ./logs/apache2:/var/log/apache2:ro
+      - ./logs/cef:/logs/cef:ro
     networks:
       - bdot-net
 
@@ -236,7 +237,7 @@ services:
       OPAMP_LABELS: fleet=grrcon-edge,role=edge,configuration=grrcon-apache
     volumes:
       - bdot-apache-storage:/etc/otel/storage
-      - ./logs:/logs:ro
+      - ./logs/apache2:/var/log/apache2:ro
     networks:
       - bdot-net
 
