@@ -944,6 +944,12 @@ Applying the configurations before `docker compose up -d` avoids this entirely.
 - [`docs/demo-json-parsing.md`](docs/demo-json-parsing.md) — building JSON
   parsing, timestamp promotion and severity mapping by hand on the `appjson`
   stream, the one pipeline no native source or blueprint covers.
+- [`docs/demo-palo-alto-blueprint.md`](docs/demo-palo-alto-blueprint.md) — the
+  mirror image: a shipped full-pipeline blueprint that parses 13 PAN-OS log
+  types, adds MITRE ATT&CK context and exposes volume-reduction toggles.
+
+Run them back to back — the contrast between building a pipeline by hand and
+getting an expert's for free is the argument neither makes alone.
 
 ## Collector Type
 
