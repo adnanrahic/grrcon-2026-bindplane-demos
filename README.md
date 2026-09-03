@@ -948,8 +948,14 @@ Applying the configurations before `docker compose up -d` avoids this entirely.
   mirror image: a shipped full-pipeline blueprint that parses 13 PAN-OS log
   types, adds MITRE ATT&CK context and exposes volume-reduction toggles.
 
-Run them back to back — the contrast between building a pipeline by hand and
-getting an expert's for free is the argument neither makes alone.
+- [`docs/demo-native-sources.md`](docs/demo-native-sources.md) — the `apache`
+  and `cef` streams, where the source type parses on ingest and you write no
+  processors at all, plus the silent failure mode when the data does not match
+  what the parser expects.
+
+Run them in that order — hand-built, then shipped blueprint, then native source.
+Each ran on the same collectors, routing and destinations; only the amount of
+work differed, which is the argument none of them makes alone.
 
 ## Collector Type
 
