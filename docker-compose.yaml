@@ -477,6 +477,110 @@ services:
     networks:
       - bdot-net
 
+  # ---------------------------------------------------------------------------
+  # UNBOUND TWINS -- a second collector per source that deliberately has NO
+  # configuration.
+  #
+  # The mechanism is the MISSING `configuration=` label. Each grrcon-* modular
+  # configuration matches on `configuration=grrcon-<x>`, so a collector that
+  # never reports that label matches nothing and sits at `CONFIGURATION: -`.
+  # That is a genuinely unbound collector, not one bound to a broken pipeline --
+  # useful for demonstrating the unbound state and its recovery.
+  #
+  # They carry NO `fleet=` label either, so they belong to no fleet -- the five
+  # grrcon-source-* fleets hold only their one bound collector each.
+  #
+  # That is not cosmetic. A fleet's `spec.configuration` binds any member that
+  # has no `configuration=` label of its own, so a twin placed in its source
+  # fleet gets assigned that source's pipeline within seconds of registering and
+  # is NOT unbound. Verified the hard way: the winsec twin was handed
+  # grrcon-winsec, tried to apply it, and died on the missing credentials.json.
+  # Staying out of every fleet is what keeps these genuinely unbound.
+  #
+  # `role=source-unbound` is their only label, which also keeps them out of
+  # `--selector role=source` -- that still means "the five that actually run a
+  # pipeline".
+  #
+  # Three omissions, each deliberate:
+  #   no ports   -- bdot-panos/winsec/appjson already publish 5141-5143 on the
+  #                 host; a twin republishing those would fail on a bind
+  #                 collision. An unbound collector has no receiver anyway.
+  #   no mounts  -- no pipeline means no file_log receiver and no chronicle
+  #                 exporter, so the winsec twin needs no credentials.json and
+  #                 will NOT hit the startup failure the bound one would.
+  #   no aliases -- plain bdot-net, so nothing can route to them.
+  # ---------------------------------------------------------------------------
+
+  bdot-apache-unbound:
+    <<: *bdot
+    container_name: bdot-apache-unbound
+    hostname: bdot-apache-unbound
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T21
+      OPAMP_AGENT_NAME: bdot-apache-unbound
+      OPAMP_LABELS: role=source-unbound
+    volumes:
+      - bdot-apache-unbound-storage:/etc/otel/storage
+    networks:
+      - bdot-net
+
+  bdot-cef-unbound:
+    <<: *bdot
+    container_name: bdot-cef-unbound
+    hostname: bdot-cef-unbound
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T22
+      OPAMP_AGENT_NAME: bdot-cef-unbound
+      OPAMP_LABELS: role=source-unbound
+    volumes:
+      - bdot-cef-unbound-storage:/etc/otel/storage
+    networks:
+      - bdot-net
+
+  bdot-panos-unbound:
+    <<: *bdot
+    container_name: bdot-panos-unbound
+    hostname: bdot-panos-unbound
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T23
+      OPAMP_AGENT_NAME: bdot-panos-unbound
+      OPAMP_LABELS: role=source-unbound
+    volumes:
+      - bdot-panos-unbound-storage:/etc/otel/storage
+    networks:
+      - bdot-net
+
+  bdot-winsec-unbound:
+    <<: *bdot
+    container_name: bdot-winsec-unbound
+    hostname: bdot-winsec-unbound
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T24
+      OPAMP_AGENT_NAME: bdot-winsec-unbound
+      OPAMP_LABELS: role=source-unbound
+    volumes:
+      - bdot-winsec-unbound-storage:/etc/otel/storage
+    networks:
+      - bdot-net
+
+  bdot-appjson-unbound:
+    <<: *bdot
+    container_name: bdot-appjson-unbound
+    hostname: bdot-appjson-unbound
+    environment:
+      <<: *bdot-env
+      OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T25
+      OPAMP_AGENT_NAME: bdot-appjson-unbound
+      OPAMP_LABELS: role=source-unbound
+    volumes:
+      - bdot-appjson-unbound-storage:/etc/otel/storage
+    networks:
+      - bdot-net
+
 volumes:
   bdot-edge-01-storage:
   bdot-edge-02-storage:
@@ -493,6 +597,11 @@ volumes:
   bdot-panos-storage:
   bdot-winsec-storage:
   bdot-appjson-storage:
+  bdot-apache-unbound-storage:
+  bdot-cef-unbound-storage:
+  bdot-panos-unbound-storage:
+  bdot-winsec-unbound-storage:
+  bdot-appjson-unbound-storage:
   bdot-01-storage:
   bdot-02-storage:
   bdot-03-storage:

@@ -1,6 +1,8 @@
 # GrrCON demo: Bindplane-managed gateway topology
 
-Twenty-five BDOT collectors in Docker, all managed from Bindplane Cloud over OpAMP.
+Thirty BDOT collectors in Docker, all managed from Bindplane Cloud over OpAMP.
+Twenty-five run a pipeline; five are deliberately unbound (see [Unbound
+twins](#unbound-twins)).
 
 Three tiers, seven fleets -- the two multi-collector tiers get one fleet each,
 and every source collector gets its own:
@@ -10,6 +12,9 @@ and every source collector gets its own:
   configuration, shipping straight to a backend. One fleet per collector, so any
   single source can be upgraded, restarted or rolled on its own. They all keep
   `role=source`, so `--selector role=source` still addresses the tier at once.
+  Each of these fleets holds exactly one collector -- the unbound twins are
+  deliberately kept out of every fleet, for a reason worth knowing before you
+  add one: see [Unbound twins](#unbound-twins).
 - **`grrcon-edge`** -- ten collectors (`bdot-edge-01..10`) all running the same
   configuration: the five native sources, forwarding to the gateway pool.
   Simulates a fleet of edge hosts.
@@ -182,7 +187,8 @@ bindplane rollout start grrcon-edge
 **The order is not cosmetic.** A collector's `configuration=` label binds only
 when its value *changes* while the named configuration already exists. Start the
 collectors first and they register, evaluate the label against a configuration
-that does not exist yet, and never re-check -- leaving all 25 sitting at
+that does not exist yet, and never re-check -- leaving all 25 pipeline
+collectors sitting at
 `CONFIGURATION: -` forever. Neither a container restart nor re-setting the label
 to the same value fixes it. See "Recovering an unbound collector" below.
 
@@ -208,6 +214,61 @@ Five independent pipelines, one Bindplane configuration each:
 
 Each source stamps its own `log_type`, so there is no routing connector and no
 `appname` coupling: **the collector a stream lands on is its identity.**
+
+### Unbound twins
+
+Each source collector has a second instance, `bdot-<source>-unbound`, that
+deliberately runs **no configuration** -- five collectors that register, connect,
+and sit at `CONFIGURATION: -`. Useful for demonstrating the unbound state and
+its recovery against a collector that is genuinely unbound rather than merely
+broken.
+
+| Collector | Fleet | Configuration |
+|---|---|---|
+| `bdot-apache` | `grrcon-source-apache` | `grrcon-apache` |
+| `bdot-apache-unbound` | none | none |
+
+...and the same shape for `cef`, `panos`, `winsec` and `appjson`.
+
+The mechanism is the **missing `configuration=` label**. Each `grrcon-*`
+configuration matches on `configuration=grrcon-<x>`, so a collector that never
+reports that label matches nothing.
+
+**They must stay out of every fleet, and that is not cosmetic.** A fleet's
+`spec.configuration` binds any member that has no `configuration=` label of its
+own -- so a twin placed in its own source fleet is assigned that source's
+pipeline within seconds of registering and is *not* unbound. Measured, not
+assumed: with `fleet=grrcon-source-<x>` set, four twins picked up their source's
+configuration immediately and the fifth did this:
+
+```
+Failed applying remote config: failed to start "chronicle/Google-SecOps-Linux"
+exporter: open /opt/credentials.json: no such file or directory
+```
+
+That is `bdot-winsec-unbound` being handed `grrcon-winsec` and dying on the
+credentials file it does not mount -- a bound collector that cannot start, which
+is the opposite of the goal. Its `CONFIGURATION: -` in the UI was a *failed*
+remote config, not an unbound one. Dropping the `fleet=` label fixed all five.
+
+Note the asymmetry: a fleet only falls back to `spec.configuration` for members
+that have no `configuration=` label. Members that carry one keep it, which is
+why the five bound collectors were never affected either way.
+
+Three things the twins deliberately omit, each for a concrete reason:
+
+| Omitted | Why |
+|---|---|
+| published ports | `bdot-panos`/`winsec`/`appjson` already publish 5141-5143 on the host; a twin republishing those fails on a bind collision. An unbound collector has no receiver anyway. |
+| log mounts, `credentials.json` | No pipeline means no `file_log` receiver and no chronicle exporter, so the winsec twin needs no credentials file -- and cannot hit the startup failure above. |
+| pool aliases | Plain `bdot-net`, so nothing can route to them. |
+
+To relabel one after it has registered, remember that server-side labels win over
+what a re-registering collector reports. An empty value deletes a label:
+
+```bash
+bindplane label agent 01K5GRRC0N0000000000BD0T21 fleet= --overwrite
+```
 
 ### The edge tier mirrors all five
 
@@ -374,15 +435,16 @@ bindplane delete configuration grrcon-v2-probe --force
 ## Verify
 
 ```bash
-docker compose ps                                     # 25 up
+docker compose ps                                     # 30 up
 bindplane get fleets | grep grrcon                    # 7 grrcon fleets
 bindplane get agents --selector fleet=grrcon-gateway  # 10 gateways
 bindplane get agents --selector fleet=grrcon-edge     # 10 edge
 bindplane get agents --selector role=source           # 5 source collectors
+bindplane get agents --selector role=source-unbound   # 5 unbound, no fleet
 bindplane get agents --selector fleet=grrcon-source-apache   # 1
 ```
 
-There is no single selector covering all 25 -- the fleet split is what makes
+There is no single selector covering all 30 -- the fleet split is what makes
 that true. Use `role=edge` / `role=gateway` / `role=source` to slice by tier:
 `role=` is the non-exclusive label, which is why the source tier is still
 addressable as a unit after being split into five fleets.
@@ -1081,7 +1143,7 @@ docker compose down -v                             # agents reconnect with same 
 
 | File | Purpose |
 |---|---|
-| `docker-compose.yaml` | 25 collectors, network aliases, per-collector volumes, credentials mount |
+| `docker-compose.yaml` | 30 collectors (25 with a pipeline, 5 unbound), network aliases, per-collector volumes, credentials mount |
 | `docker-compose.blitz.yaml` | telemetry generators feeding tcp 5141-5143 and the tailed log files |
 | `.env` | secret key and endpoint -- gitignored, never commit |
 | `.env.example` | template |
