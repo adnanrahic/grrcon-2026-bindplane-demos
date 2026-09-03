@@ -939,6 +939,12 @@ bindplane label agent --selector fleet=grrcon-gateway configuration=grrcon-gatew
 
 Applying the configurations before `docker compose up -d` avoids this entirely.
 
+## Demo walkthroughs
+
+- [`docs/demo-json-parsing.md`](docs/demo-json-parsing.md) — building JSON
+  parsing, timestamp promotion and severity mapping by hand on the `appjson`
+  stream, the one pipeline no native source or blueprint covers.
+
 ## Collector Type
 
 Each configuration carries `agent-type: observiq-otel-collector` in
