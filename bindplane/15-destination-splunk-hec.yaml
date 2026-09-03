@@ -1,0 +1,29 @@
+# Splunk HEC for the CEF stream.
+#
+# In a 15- file, not 40-gateway.yaml, because 20-source-cef.yaml references it:
+# apply runs in filename order, so defining it in 40- fails with "unknown
+# Destination" against a fresh account.
+#
+# hostname/token are REPLACE_ME -- Splunk is the one backend with no real
+# endpoint here.
+---
+apiVersion: bindplane.observiq.com/v1
+kind: Destination
+metadata:
+  name: Splunk-HEC
+spec:
+  type: splunkhec_v2
+  parameters:
+  - name: telemetry_types
+    value:
+    - Logs
+  - name: hostname
+    value: REPLACE_ME.splunkcloud.com
+  - name: port
+    value: 8088
+  - name: path
+    value: "/services/collector/event"
+  - name: token
+    value: REPLACE_ME
+  - name: index_logs
+    value: main

@@ -1,34 +1,30 @@
 # Demo: Windows Events to Google SecOps — when the native source can't run
 
-A walkthrough for the `winsec` stream. It completes the set with a fourth
-pattern: a native source **exists** for this format and is **unusable here**.
+The `winsec` stream: a native source **exists** for this format and is
+**unusable here**.
 
 | Walkthrough | Pattern | Processors you write |
 |---|---|---|
 | [`demo-json-parsing.md`](demo-json-parsing.md) | nothing ships | 3, by hand |
-| [`demo-palo-alto-blueprint.md`](demo-palo-alto-blueprint.md) | full pipeline blueprint | 0 — 32 shipped |
-| [`demo-native-sources.md`](demo-native-sources.md) | native source parses on ingest | 0 |
-| **this one** | **native source exists, platform rules it out** | **build from XML, then standardize** |
+| [`demo-palo-alto-blueprint.md`](demo-palo-alto-blueprint.md) | blueprint | 0 — 32 shipped |
+| [`demo-native-sources.md`](demo-native-sources.md) | native source | 0 |
+| **this one** | **platform rules the source out** | **build from XML** |
 
 ## Why the native source is off the table
 
-Bindplane has `windowsevents_v3`, `windowsevents_v2`,
-`windowseventforwarding`, `windowsremotecollection` and `windowseventtrace`.
-All render to the **`windowseventlog` receiver**, which reads the Windows Event
-Log API — channels and XPath queries against a live Windows host.
+`windowsevents_v3`, `windowsevents_v2`, `windowseventforwarding`,
+`windowsremotecollection` and `windowseventtrace` all render to the
+**`windowseventlog` receiver**, which reads the Windows Event Log API against a
+live Windows host. It cannot read a file and cannot run in a Linux container —
+and every collector here is Linux. So the stream arrives over **raw TCP** with
+`parse_format: none`.
 
-It cannot read a file, and it cannot run in a Linux container. Every collector in
-this demo is Linux. So the format-specific source is out, and the stream arrives
-over **raw TCP** with `parse_format: none`.
+More common than it sounds: agentless collection, forwarded events, syslog relays
+and anything containerised all land here — Windows Event XML on a socket with no
+Windows-specific receiver to hand it to.
 
-This is a more common situation than it sounds. Agentless collection, forwarded
-events, syslog relays from Windows infrastructure, and anything running in a
-container all land in the same place: you have Windows Event XML on a socket and
-no Windows-specific receiver to hand it to.
-
-**Worth stating plainly on stage:** this is not Bindplane failing to ship
-something. The native source exists and is the right answer on a Windows host.
-It is the wrong answer here, and the demo shows what you do instead.
+**Worth stating on stage:** the native source exists and is the right answer on a
+Windows host. It is the wrong answer here.
 
 ## Starting state
 
@@ -52,38 +48,29 @@ SeverityText:                            <-- not set
 SeverityNumber: Unspecified(0)
 ```
 
-One XML string. Same three problems as the JSON stream — no fields, no
-timestamp, no severity — but with a harder shape: nested elements, attributes
-carrying the meaning (`<Data Name="TargetUserName">`), and empty elements that
-naive parsers drop.
+One XML string. Same three problems as the JSON stream — no fields, timestamp or
+severity — with a harder shape: nested elements, meaning in *attributes*, and
+empty elements naive parsers drop.
 
-**Raw TCP is deliberate.** `parse_format: none` means the body is the XML exactly
-as generated, with no syslog header to strip. Contrast the Palo Alto stream,
-where the blueprint *expects* a header and removes it itself.
+**Raw TCP is deliberate.** `parse_format: none` keeps the body as generated, with
+no syslog header to strip. Contrast Palo Alto, where the blueprint *expects* a
+header and removes it.
 
 ## The event mix, and why it matters
 
-`samples/winsec.xml` is 67 lines, deliberately skewed:
-
-| EventID | Count | Meaning |
-|---|---|---|
-| 4624 | 52 | successful logon |
-| 4688 | 6 | process creation |
-| 4625 | 6 | failed logon |
-| 4740 | 3 | account lockout |
+`samples/winsec.xml` is 67 lines, deliberately skewed: 52× 4624 (successful
+logon), 6× 4688 (process creation), 6× 4625 (failed logon), 3× 4740 (lockout).
 
 `filegen` picks one random line per cycle, so **~78% of this stream is benign
-successful logons**. That ratio is the demo: 4625 (failed logon) and 4740
-(lockout) are what a SOC cares about, and they are buried. Retune with
-`samples/generate-winsec.sh`.
+successful logons** — and 4625/4740, what a SOC actually cares about, are buried.
+That ratio is the demo. Retune with `samples/generate-winsec.sh`.
 
 ## What ships for this stream
 
-Nothing parses Windows Event XML on ingest, but four bundles do the work
-downstream:
+Nothing parses Windows Event XML on ingest; four bundles do it downstream.
 
-**`parse-windows-event-xml`** — the parser. Four processors, and the three
-before the last are the interesting part:
+**`parse-windows-event-xml`** — the parser. Four processors, the first three
+being the interesting part:
 
 ```
 Convert XML Attributes To Elements   xml_attributes_to_elements
@@ -92,11 +79,10 @@ Convert XML Text To Elements         xml_text_to_elements
 Parse Simplified XML                 parse_simple_xml
 ```
 
-Three normalization passes before a single parse. That is not overengineering:
-Windows Event XML puts meaning in *attributes* (`<Data Name="TargetUserName">`),
-and a simplified XML parser keyed on element names would throw those away. Empty
-`<Data>` elements vanish entirely without the placeholder step. **This is a good
-slide** — it is a concrete answer to "why can't I just parse the XML?"
+Three normalization passes before one parse, and not overengineering: meaning
+lives in *attributes*, which an element-keyed parser would discard, and empty
+`<Data>` elements vanish without the placeholder step. **Good slide** — a
+concrete answer to "why can't I just parse the XML?"
 
 **`google-secops-windows-routing-bundle`** — a full pipeline blueprint:
 
@@ -107,20 +93,18 @@ Batch (WINEVTLOG)  Batch (SYSMON)  Batch (POWERSHELL)
 Batch (DNS)        Batch (MSSQL)
 ```
 
-The standardization step assigns the SecOps log type; the five batch processors
-then keep each log type in its own batch. **SecOps ingests per log type**, so a
-mixed batch is a problem — the routing is not cosmetic.
+Standardization assigns the SecOps log type; the five batch processors keep each
+type in its own batch. **SecOps ingests per log type**, so a mixed batch is a
+problem — the routing is not cosmetic.
 
-**`google-secops-bundle`** — general SecOps standardization.
-
+**`google-secops-bundle`** — general standardization.
 **`deduplicate-windows-events-rendering-info`** and **`remove-winevt-messages`** —
-volume reduction. Windows events carry large rendered-message blocks that
-duplicate the structured data; dropping them is a substantial saving on a stream
-that is mostly 4624s.
+volume reduction; Windows events carry large rendered-message blocks duplicating
+the structured data, a substantial saving on a mostly-4624 stream.
 
-There is also a `secops_filter` processor type, and
-`crowdstrike-falcon-google-secops-volume-reduction` as a worked example of the
-30–50% reduction pattern applied to a different EDR source.
+Also a `secops_filter` processor type, and
+`crowdstrike-falcon-google-secops-volume-reduction` as a worked 30–50% reduction
+example on a different EDR source.
 
 ## The flow
 
@@ -145,10 +129,9 @@ There is also a `secops_filter` processor type, and
 
 ## Suggested placement in the set
 
-Run it **after** the JSON walkthrough and **before or after** Palo Alto. It is
-the natural sequel to JSON — same "nothing parses this" starting point, but with
+Run it **after** JSON — the natural sequel, same "nothing parses this" start but
 a harder format and a vendor destination with real requirements. The four
-together make a complete argument:
+together:
 
 - `appjson` — nothing ships, build it
 - `winsec` — the native source exists but not on this platform, build it anyway
@@ -157,13 +140,10 @@ together make a complete argument:
 
 ## The credentials trap
 
-`grrcon-winsec` is the only source-tier configuration exporting to Google SecOps,
-and the chronicle exporter **reads its credentials file at startup**. Without it
-the collector fails to start — not the pipeline, the whole collector.
-
-That is why `bdot-winsec` mounts `credentials.json` and the other source
-collectors do not. It bit this project for real: a rollout halted on the first
-collector with
+The chronicle exporter **reads its credentials file at startup**. Without it the
+collector fails to start — not the pipeline, the whole collector. That is why
+`bdot-winsec` mounts `credentials.json`. It bit this project for real: a rollout
+halted on the first collector with
 
 ```
 failed to start "chronicle/Google-SecOps" exporter:
@@ -171,17 +151,17 @@ load Google credentials: read credentials file: open C:/credentials.json: no suc
 ```
 
 — a Windows path on a Linux container, from the account's `Google-SecOps`
-destination. `Google-SecOps-Linux` uses `/opt/credentials.json`, which is what
-this pipeline uses.
+destination. `Google-SecOps-Linux`, which this pipeline uses, points at
+`/opt/credentials.json`.
 
 **The credentials are a dummy** — a real 2048-bit RSA key with a fake identity,
-so the exporter loads cleanly and then fails at the network. See the README's
-"Dummy SecOps credentials".
+so the exporter loads cleanly then fails at the network.
 
-**So SecOps failing is not observable the way the others are.** Elastic,
-Dynatrace and Splunk log export errors you can count; SecOps fails quietly. Do
-not read a low error count on this stream as success. Verify with the debug
-destination or Bindplane throughput instead.
+**SecOps failing is not observable the way the others are.** Elastic, Dynatrace
+and Splunk log countable export errors; SecOps fails quietly — measured at 4 log
+lines in 5 minutes against Splunk's 423 in 60 seconds. Never read a low error
+count here as success; use Bindplane throughput instead. (There is no committed
+debug destination any more — see `.claude/50-routing.md`.)
 
 ## Resetting between runs
 
@@ -196,30 +176,21 @@ that file before re-applying or they will come straight back.
 
 ## Traps
 
-**`log_type` is an attribute here**, set by the tcp source, so the gateway router
-matches `attributes["log_type"] == "windows_event.security"`. Apache is the odd
-one out with `body["log_type"]`. Adding processors never affects routing.
-
-**Do not switch this stream to syslog to "fix" the timestamp.** The XML carries
-its own `TimeCreated SystemTime`, which a parser can promote. Wrapping it in
-syslog adds a header to strip and, with blitz's RFC 5424 output, a
-non-compliant nanosecond timestamp that the collector's syslog parser rejects
-outright — silently.
-
-**A paused progressive rollout is not a failure.** If you roll the gateway
-config during this demo, `grrcon-gateway` stages Canary → Prod and reports
-`Paused ... errors=0` in between. `bindplane rollout resume grrcon-gateway`
-advances it.
+- **`log_type` is an attribute here**, set by the tcp source, so the router
+  matches `attributes["log_type"] == "windows_event.security"`. Apache is the odd
+  one out with `body["log_type"]`. Processors never affect routing.
+- **Do not switch to syslog to "fix" the timestamp.** The XML carries its own
+  `TimeCreated SystemTime` for a parser to promote. Syslog adds a header to strip
+  and, with blitz's RFC 5424 output, a non-compliant nanosecond timestamp the
+  collector's syslog parser rejects silently.
+- **A paused progressive rollout is not a failure.** `grrcon-gateway` stages
+  Canary → Prod and reports `Paused ... errors=0` between them;
+  `bindplane rollout resume grrcon-gateway` advances it.
 
 ## Reference
 
-- Stream definition: `bindplane/20-source-winsec.yaml`
-- Generator: `blitz-winsec` in `docker-compose.blitz.yaml`; edge duplicate
-  `blitz-winsec-gw`
-- Sample regeneration: `samples/generate-winsec.sh`
-- Bundles: `parse-windows-event-xml`, `google-secops-windows-routing-bundle`,
-  `google-secops-bundle`, `deduplicate-windows-events-rendering-info`,
-  `remove-winevt-messages`
-- Companion walkthroughs: [`demo-json-parsing.md`](demo-json-parsing.md),
-  [`demo-palo-alto-blueprint.md`](demo-palo-alto-blueprint.md),
-  [`demo-native-sources.md`](demo-native-sources.md)
+Stream `bindplane/20-source-winsec.yaml`; generators `blitz-winsec` and
+`blitz-winsec-gw`; samples via `samples/generate-winsec.sh`. Bundles:
+`parse-windows-event-xml`, `google-secops-windows-routing-bundle`,
+`google-secops-bundle`, `deduplicate-windows-events-rendering-info`,
+`remove-winevt-messages`.

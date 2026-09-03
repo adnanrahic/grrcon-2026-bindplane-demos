@@ -1,35 +1,19 @@
-# Google Cloud Logging destination for the appjson stream.
+# Google Cloud Logging for the appjson stream. NOT the account's shared
+# Google-GCL: that one is terraform-managed and uses auth_type: auto, which
+# resolves ADC from the environment -- absent here -- so its exporter fails to
+# START rather than failing softly like Dynatrace's 404.
 #
-# Deliberately NOT the account's shared `Google-GCL`. That one is
-# terraform-managed (id tf-...) and set to `auth_type: auto`, which makes the
-# googlecloud exporter resolve Application Default Credentials from the
-# environment -- credentials these containers do not have. The result is not a
-# soft export failure like Dynatrace's 404: the exporter fails to START, so the
-# collector never runs the pipeline at all:
+# auth_type: file reads the same mocked key the chronicle exporter uses.
+# auth_type: json would take the key inline, i.e. a private key in tracked YAML;
+# credentials.json is gitignored to prevent that.
 #
-#   cannot start pipelines: failed to start "googlecloud/Google-GCL" exporter:
-#   credentials: could not find default credentials
+# The key is a mock, so export fails at request time -- the pipeline still RUNS,
+# which is the point. `project` matches the mocked key's own project_id.
 #
-# So this is a separate destination with `auth_type: file`, reading the same
-# mocked service-account key the chronicle exporter already uses. `auth_type:
-# json` would work too, but its `credentials` parameter is an inline string --
-# that means pasting a private key into a tracked YAML file, and credentials.json
-# is gitignored precisely so that never happens. `file` keeps the key on disk.
+# Numbered 15 so it applies before 20-source-appjson.yaml and 40-gateway.yaml.
 #
-# The key is a mock, so export still fails at request time. That is the point:
-# the pipeline RUNS and Bindplane measures throughput through it, matching every
-# other backend in this demo.
-#
-# `project` matches the mocked key's own project_id (grrcon-demo) rather than the
-# shared destination's real one, so the two are not confusable.
-#
-# Numbered 15 so it applies before both consumers -- 20-source-appjson.yaml and
-# 40-gateway.yaml -- since a Destination must exist before a Configuration
-# references it. See the ordering note in 10-connector-router.yaml.
-#
-# NOTE: every collector running a configuration that uses this needs
-# credentials.json mounted at /opt/credentials.json. That is bdot-appjson plus
-# the ten gateway collectors bdot-01..10.
+# NOTE: needs credentials.json at /opt/credentials.json on every collector using
+# it -- bdot-appjson plus bdot-01..10.
 ---
 apiVersion: bindplane.observiq.com/v1
 kind: Destination

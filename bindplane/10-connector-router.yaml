@@ -25,7 +25,7 @@
 # discarded via a synthesised nop pipeline. The branch is still
 # throughput-measured, so the Bindplane UI still shows the misroute; you just
 # cannot read the offending records. See "Detecting a misroute without the
-# catch-all sink" in the README.
+# catch-all sink" in .claude/50-routing.md.
 #
 # Each APPNAME is set per generator in docker-compose.blitz.yaml. OTLP could not
 # carry this distinction: blitz hardcodes service.name="blitz" on OTLP output

@@ -18,27 +18,6 @@ spec:
   - name: enable_tls
     value: false
 ---
-apiVersion: bindplane.observiq.com/v1
-kind: Destination
-metadata:
-  name: Splunk-HEC
-spec:
-  type: splunkhec_v2
-  parameters:
-  - name: telemetry_types
-    value:
-    - Logs
-  - name: hostname
-    value: REPLACE_ME.splunkcloud.com
-  - name: port
-    value: 8088
-  - name: path
-    value: "/services/collector/event"
-  - name: token
-    value: REPLACE_ME
-  - name: index_logs
-    value: main
----
 apiVersion: bindplane.observiq.com/v2
 kind: Configuration
 metadata:
