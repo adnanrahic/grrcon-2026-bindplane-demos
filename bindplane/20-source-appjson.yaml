@@ -1,9 +1,13 @@
 # Mixed-format JSON app logs -> Dynatrace.
 #
-# No native source covers this shape -- that is the point of the stream, since
-# it gives Pipeline Intelligence something no blueprint already handles. The tcp
-# source's own `parse_format: json` turns the body into structured fields
-# without needing a downstream processor.
+# parse_format is deliberately `none`: the body arrives as a RAW JSON string,
+# not a parsed map. The tcp source can parse it natively (parse_format: json
+# renders a json_parser with parse_to: body), but leaving it unparsed is the
+# point -- this stream is the one no blueprint covers, so it is where adding
+# parsing processors by hand is worth demonstrating.
+#
+# log_type is still stamped as an attribute by a separate `add` operator, so
+# the gateway router keeps matching attributes["log_type"] == "appjson".
 ---
 apiVersion: bindplane.observiq.com/v1
 kind: Source
@@ -19,7 +23,7 @@ spec:
   - name: log_type
     value: appjson
   - name: parse_format
-    value: json
+    value: none
 ---
 apiVersion: bindplane.observiq.com/v2
 kind: Configuration

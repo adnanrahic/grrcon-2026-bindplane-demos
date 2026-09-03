@@ -656,9 +656,30 @@ request_id trace_id span_id duration_ms component version
 correlation_id region
 ```
 
-No blueprint covers this shape, which is what gives Pipeline Intelligence a real
-job. The generator also supports a `pii` type
-(`BLITZ_GENERATOR_JSON_TYPE: pii`) if you want a redaction story instead.
+**Deliberately left unparsed.** The `tcp` source *can* parse it natively --
+`parse_format: json` renders a `json_parser` with `parse_to: body` -- but
+`grrcon-appjson-in` sets `parse_format: none`, so the body arrives as a raw JSON
+string:
+
+```
+Body: Str({"component":"storage","correlation_id":"21164fa7-...","level":"INFO",...})
+```
+
+That is the point of this stream: no blueprint covers this shape, so it is the
+one worth demonstrating hand-built parsing processors on. Turning native parsing
+back on is a one-line change to `parse_format`.
+
+`log_type` is stamped by a separate `add` operator, independent of
+`parse_format`, so routing keeps working either way.
+
+Two things the tcp source does **not** do even with parsing enabled: it leaves
+the record `Timestamp` at 1970 unless `parse_timestamp: true` /
+`timestamp_field: timestamp` are set, and it has no severity option at all, so
+`level: FATAL` never becomes an OTel severity. CEF gets both for free from its
+plugin's `severity_parser`.
+
+The generator also supports a `pii` type (`BLITZ_GENERATOR_JSON_TYPE: pii`) if
+you want a redaction story instead.
 
 ### 4. CEF -- `blitz-cef`
 
