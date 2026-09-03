@@ -474,6 +474,10 @@ services:
       - "5143:5143"
     volumes:
       - bdot-appjson-storage:/etc/otel/storage
+      # grrcon-google-gcl uses auth_type: file, so the googlecloud exporter
+      # reads this at STARTUP -- without it the collector fails to start its
+      # pipeline, exactly as the chronicle exporter does on bdot-winsec.
+      - ./credentials.json:/opt/credentials.json:ro
     networks:
       - bdot-net
 

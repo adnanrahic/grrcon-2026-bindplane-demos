@@ -1,0 +1,49 @@
+# Google Cloud Logging destination for the appjson stream.
+#
+# Deliberately NOT the account's shared `Google-GCL`. That one is
+# terraform-managed (id tf-...) and set to `auth_type: auto`, which makes the
+# googlecloud exporter resolve Application Default Credentials from the
+# environment -- credentials these containers do not have. The result is not a
+# soft export failure like Dynatrace's 404: the exporter fails to START, so the
+# collector never runs the pipeline at all:
+#
+#   cannot start pipelines: failed to start "googlecloud/Google-GCL" exporter:
+#   credentials: could not find default credentials
+#
+# So this is a separate destination with `auth_type: file`, reading the same
+# mocked service-account key the chronicle exporter already uses. `auth_type:
+# json` would work too, but its `credentials` parameter is an inline string --
+# that means pasting a private key into a tracked YAML file, and credentials.json
+# is gitignored precisely so that never happens. `file` keeps the key on disk.
+#
+# The key is a mock, so export still fails at request time. That is the point:
+# the pipeline RUNS and Bindplane measures throughput through it, matching every
+# other backend in this demo.
+#
+# `project` matches the mocked key's own project_id (grrcon-demo) rather than the
+# shared destination's real one, so the two are not confusable.
+#
+# Numbered 15 so it applies before both consumers -- 20-source-appjson.yaml and
+# 40-gateway.yaml -- since a Destination must exist before a Configuration
+# references it. See the ordering note in 10-connector-router.yaml.
+#
+# NOTE: every collector running a configuration that uses this needs
+# credentials.json mounted at /opt/credentials.json. That is bdot-appjson plus
+# the ten gateway collectors bdot-01..10.
+---
+apiVersion: bindplane.observiq.com/v1
+kind: Destination
+metadata:
+  name: grrcon-google-gcl
+spec:
+  type: googlecloud
+  parameters:
+  - name: telemetry_types
+    value:
+    - Logs
+  - name: project
+    value: grrcon-demo
+  - name: auth_type
+    value: file
+  - name: credentials_file
+    value: /opt/credentials.json

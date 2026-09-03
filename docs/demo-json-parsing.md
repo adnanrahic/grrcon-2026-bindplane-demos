@@ -24,7 +24,8 @@ has to earn its keep by hand.
 
 ## Starting state
 
-`blitz-json` → tcp `:5143` → `bdot-appjson` (config `grrcon-appjson`) → Dynatrace.
+`blitz-json` → tcp `:5143` → `bdot-appjson` (config `grrcon-appjson`) → Google
+Cloud Logging (`grrcon-google-gcl`).
 The same stream also reaches the gateway tier via `bdot-edge-*`.
 
 The source sets `parse_format: none` on purpose. A record on arrival:

@@ -87,7 +87,7 @@ spec:
         - destinations/d-Dynatrace
       - id: appjson
         components:
-        - destinations/d-Dynatrace
+        - destinations/d-grrcon-google-gcl
       - id: apache
         components:
         - destinations/d-Elastic
@@ -102,6 +102,8 @@ spec:
     name: Google-SecOps-Linux
   - id: d-Dynatrace
     name: Dynatrace
+  - id: d-grrcon-google-gcl
+    name: grrcon-google-gcl
   - id: d-Elastic
     name: Elastic
   - id: d-Splunk-HEC

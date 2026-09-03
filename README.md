@@ -26,7 +26,7 @@ demonstrates fleet management, but no longer carries blitz log traffic.
 
   blitz-winsec ──tcp:5142──▶ bdot-winsec  (grrcon-winsec)  ──▶ Google SecOps
   blitz-palo-alto ─tcp:5141▶ bdot-panos   (grrcon-panos)   ──▶ Dynatrace
-  blitz-json ────tcp:5143──▶ bdot-appjson (grrcon-appjson) ──▶ Dynatrace
+  blitz-json ────tcp:5143──▶ bdot-appjson (grrcon-appjson) ──▶ Google Cloud
   blitz-cef ─────file──────▶ bdot-cef     (grrcon-cef)     ──▶ Splunk HEC
   blitz-apache-native ─file▶ bdot-apache  (grrcon-apache)  ──▶ Elastic
 
@@ -208,7 +208,7 @@ Five independent pipelines, one Bindplane configuration each:
 |---|---|---|---|---|
 | `grrcon-winsec` | `bdot-winsec` | `tcp` (`parse_format: none`) | tcp :5142 | `Google-SecOps-Linux` |
 | `grrcon-panos` | `bdot-panos` | `tcp` (`parse_format: none`) | tcp :5141 | `Dynatrace` |
-| `grrcon-appjson` | `bdot-appjson` | `tcp` (`parse_format: json`) | tcp :5143 | `Dynatrace` |
+| `grrcon-appjson` | `bdot-appjson` | `tcp` (`parse_format: json`) | tcp :5143 | `grrcon-google-gcl` |
 | `grrcon-cef` | `bdot-cef` | `common_event_format` | file | `Splunk-HEC` |
 | `grrcon-apache` | `bdot-apache` | `apache_common` | file | `Elastic` |
 
@@ -362,10 +362,50 @@ Because the edge tier now exports to Google SecOps, it mounts `credentials.json`
 — the chronicle exporter reads it at startup and the collector will not start
 without it.
 
+`grrcon-google-gcl` is the exception to the rule below: it is defined in
+`bindplane/15-destination-google-gcl.yaml` rather than referenced, because the
+account's shared `Google-GCL` cannot work here -- see [Why not the shared
+Google-GCL](#why-not-the-shared-google-gcl).
+
 `Google-SecOps-Linux`, `Elastic` and `Dynatrace` are pre-existing resources in
 the Bindplane account, referenced by name rather than redefined so they keep
 their real credentials. `bindplane apply` against a **fresh** account needs those
 three created first. `Splunk-HEC` is defined in `bindplane/40-gateway.yaml`.
+
+### Why not the shared Google-GCL
+
+The account has a `Google-GCL` destination, but the appjson stream does **not**
+use it. It is set to `auth_type: auto`, which makes the googlecloud exporter
+resolve Application Default Credentials from the environment -- credentials these
+containers do not have. That is not a soft export failure like Dynatrace's 404;
+the exporter fails to **start**, so the collector never runs the pipeline:
+
+```
+cannot start pipelines: failed to start "googlecloud/Google-GCL" exporter:
+failed to start logs exporter: credentials: could not find default credentials
+```
+
+Its `credentials` parameter displays as `(sensitive)`, which looks like it should
+help, but `auth_type: auto` ignores both `credentials` and `credentials_file` --
+that parameter is only read under `auth_type: json`. It is also terraform-managed
+(`id: tf-...`), so editing it would drift from terraform and affect anything else
+that uses it.
+
+So `bindplane/15-destination-google-gcl.yaml` defines a separate
+`grrcon-google-gcl` with `auth_type: file`, reading the same mocked
+service-account key the chronicle exporter already uses. `auth_type: json` would
+also work, but its `credentials` parameter is an inline string -- that means
+pasting a private key into a tracked YAML file, and `credentials.json` is
+gitignored precisely so that never happens.
+
+The key is a mock, so export fails at request time with
+`rpc error: code = Unauthenticated`. That is the point: the pipeline **runs**, and
+Bindplane measures throughput through it, exactly like every other backend here.
+
+**Any collector running a configuration that uses it needs `credentials.json`
+mounted at `/opt/credentials.json`** -- that is `bdot-appjson` plus the ten
+gateway collectors. The mount was already present on `bdot-01..10`; it had to be
+added to `bdot-appjson`.
 
 ### Known state of each backend
 
@@ -379,7 +419,11 @@ not promise the room that data lands anywhere.
   Replace both in `bindplane/40-gateway.yaml` to make it real.
 - **Elastic** -- real endpoint, returns **HTTP 404**. Tenant is stale or the
   OTLP path has changed.
-- **Dynatrace** -- real endpoint, returns **HTTP 404**. Same.
+- **Dynatrace** -- real endpoint, returns **HTTP 404**. Same. Still carries the
+  Palo Alto stream; the appjson stream moved to Google Cloud.
+- **Google Cloud Logging** (`grrcon-google-gcl`) -- real endpoint, returns
+  **`rpc error: code = Unauthenticated`**, because `credentials.json` is a mock.
+  The pipeline still runs.
 
 `grrcon-debug-out` is no longer a proof-of-flow sink -- it only receives
 *unmatched* logs. An empty debug output now means routing is working. See
@@ -471,7 +515,7 @@ it:
 
 ```bash
 for row in bdot-apache:Elastic bdot-cef:Splunk bdot-panos:Dynatrace \
-           bdot-appjson:Dynatrace bdot-winsec:SecOps; do
+           bdot-appjson:googlecloud bdot-winsec:SecOps; do
   n=${row%%:*}; d=${row##*:}
   printf "%-14s -> %-10s %s\n" "$n" "$d" \
     "$(docker logs --since 60s $n 2>&1 | grep -c "$d")"
@@ -1153,7 +1197,8 @@ docker compose down -v                             # agents reconnect with same 
 | `bindplane/20-source-cef.yaml` | `common_event_format` (file) -> Splunk HEC |
 | `bindplane/20-source-panos.yaml` | `tcp` :5141 -> Dynatrace |
 | `bindplane/20-source-winsec.yaml` | `tcp` :5142 -> Google SecOps |
-| `bindplane/20-source-appjson.yaml` | `tcp` :5143 (JSON parsed) -> Dynatrace |
+| `bindplane/15-destination-google-gcl.yaml` | `grrcon-google-gcl` -- Google Cloud Logging, `auth_type: file` |
+| `bindplane/20-source-appjson.yaml` | `tcp` :5143 (JSON parsed) -> Google Cloud |
 | `bindplane/50-fleets.yaml` | `grrcon-gateway`, `grrcon-edge`, and one `grrcon-source-*` fleet per source collector |
 | `bindplane/30-edge.yaml` | `grrcon-edge` -- the five native sources -> gateway pool |
 | `bindplane/10-connector-router.yaml` | routing connector -- splits the pooled stream by `log_type`. numbered `10-` so it applies first: a connector must exist before the config referencing it |

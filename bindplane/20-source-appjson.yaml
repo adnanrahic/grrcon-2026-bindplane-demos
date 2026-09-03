@@ -1,4 +1,4 @@
-# Mixed-format JSON app logs -> Dynatrace.
+# Mixed-format JSON app logs -> Google Cloud Logging (grrcon-google-gcl).
 #
 # parse_format is deliberately `none`: the body arrives as a RAW JSON string,
 # not a parsed map. The tcp source can parse it natively (parse_format: json
@@ -40,7 +40,7 @@ spec:
       logs:
       - id: '0'
         components:
-        - destinations/d-Dynatrace
+        - destinations/d-grrcon-google-gcl
   destinations:
-  - id: d-Dynatrace
-    name: Dynatrace
+  - id: d-grrcon-google-gcl
+    name: grrcon-google-gcl
