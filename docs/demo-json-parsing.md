@@ -65,28 +65,52 @@ or the severity.
 
 ## Showing the starting state
 
-The debug destination is the quickest way to put a record on screen. Temporarily
-add it to `grrcon-appjson` and raise verbosity:
+A debug destination is the quickest way to put a record on screen. There is no
+longer one in the committed configuration -- `grrcon-debug-out` was removed from
+`grrcon-gateway` -- so define a temporary one and wire it to `grrcon-appjson`:
+
+```yaml
+# a scratch file, e.g. /tmp/debug-out.yaml -- do NOT add this to bindplane/
+apiVersion: bindplane.observiq.com/v1
+kind: Destination
+metadata:
+  name: grrcon-debug-out
+spec:
+  type: custom
+  parameters:
+  - name: telemetry_types
+    value: [Logs]
+  - name: configuration
+    value: |-
+      debug:
+        verbosity: detailed
+```
 
 ```bash
-# bindplane/20-source-appjson.yaml -> add to the logs route:
+bindplane apply -f /tmp/debug-out.yaml     # destination must exist FIRST
+
+# then in bindplane/20-source-appjson.yaml add to the logs route:
 #     - destinations/d-grrcon-debug-out
-# bindplane/40-gateway.yaml -> verbosity: detailed
-bindplane apply -f bindplane/
-bindplane rollout start grrcon-gateway     # the destination lives here
-bindplane rollout start grrcon-appjson     # then the config that uses it
+# and to its destinations list:
+#     - id: d-grrcon-debug-out
+#       name: grrcon-debug-out
+bindplane apply -f bindplane/20-source-appjson.yaml
+bindplane rollout start grrcon-appjson
 
 docker logs --since 30s bdot-appjson | grep -A20 'LogRecord #'
 ```
 
-Two gotchas, both of which will waste stage time if you hit them cold:
+Three gotchas, all of which will waste stage time if you hit them cold:
 
-- **Roll out the gateway config first.** `grrcon-debug-out` is defined in
-  `40-gateway.yaml`; a config referencing it picks up the *version it was
-  applied against*, so rolling `grrcon-appjson` before the destination's new
-  version exists leaves you on `verbosity: basic` and no visible records.
+- **Apply the destination before the configuration.** A config referencing a
+  destination picks up the *version it was applied against*, so applying
+  `grrcon-appjson` first leaves you with a dangling reference or a stale
+  verbosity and no visible records.
 - **`verbosity: basic` prints a count, not a record.** If you only see
-  `"msg":"Logs" ... "log records": 9`, verbosity did not take effect.
+  `"msg":"Logs" ... "log records": 9`, verbosity did not take effect -- the
+  snippet above sets `detailed` for this reason.
+- **Revert when you are done.** `git checkout bindplane/20-source-appjson.yaml`,
+  re-apply, roll out, then `bindplane delete destination grrcon-debug-out`.
 
 ## The flow
 
@@ -180,11 +204,19 @@ bindplane rollout start grrcon-gateway
 Check you are back to the starting state:
 
 ```bash
-# catch-all must be 0 -- log_type routing is independent of parsing
-for i in $(seq -w 1 10); do
-  docker logs --since 3m bdot-$i 2>&1 \
-    | grep -o '"log records":[0-9]*' | awk -F: '{s+=$2} END{print s+0}'
-done | paste -sd+ - | bc
+# These four gateway exporters should all be non-zero. This replaces the old
+# "catch-all must be 0" check: with grrcon-debug-out removed the catch-all
+# exports to nop, so it emits no log lines whether routing works or not --
+# though it IS still throughput-measured in the Bindplane UI.
+# SecOps is excluded on purpose: the chronicle exporter fails quietly, so a zero
+# over a short window means nothing. Check its branch in the UI instead.
+for d in Elastic Splunk Dynatrace googlecloud; do
+  n=0
+  for i in $(seq -w 1 10); do
+    n=$((n + $(docker logs --since 3m bdot-$i 2>&1 | grep -ci "$d")))
+  done
+  printf '%-12s %s\n' "$d" "$n"
+done
 ```
 
 ## Things that will not break, and one that will
@@ -192,8 +224,8 @@ done | paste -sd+ - | bc
 **Routing is independent of parsing.** `log_type: appjson` is stamped by a
 separate `add` operator on the source, not by the parser. You can add, remove, or
 break every processor in this flow and the gateway router will still route the
-stream correctly. Verified: catch-all stayed 0 across the switch from
-`parse_format: json` to `none`.
+stream correctly. Verified: every gateway exporter kept receiving across the
+switch from `parse_format: json` to `none`.
 
 **Turning native parsing back on is one line.** `parse_format: json` on
 `grrcon-appjson-in` restores the built-in `json_parser` and skips step 1
@@ -215,5 +247,6 @@ outage on stage.
 
 - Stream definition: `bindplane/20-source-appjson.yaml`
 - Generator: `blitz-json` in `docker-compose.blitz.yaml`
-- Debug destination: `grrcon-debug-out` in `bindplane/40-gateway.yaml`
+- Debug destination: none committed -- see "Showing the starting state" for a
+  temporary one (`grrcon-debug-out` was removed from `bindplane/40-gateway.yaml`)
 - Field list and generator internals: README, "What blitz generates" → section 3

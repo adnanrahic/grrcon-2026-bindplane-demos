@@ -20,8 +20,12 @@
 #   - apache_common regex-parses INTO THE BODY, so its log_type is a body field
 #     and the only attribute on the record is log.file.name
 # Hence body["log_type"] for apache and attributes["log_type"] for the rest.
-# A mismatch matches nothing silently and everything lands in the catch-all --
-# check the debug destination first if a stream disappears.
+# A mismatch matches nothing silently and everything lands in the catch-all,
+# which grrcon-gateway no longer wires to a destination -- so the records are
+# discarded via a synthesised nop pipeline. The branch is still
+# throughput-measured, so the Bindplane UI still shows the misroute; you just
+# cannot read the offending records. See "Detecting a misroute without the
+# catch-all sink" in the README.
 #
 # Each APPNAME is set per generator in docker-compose.blitz.yaml. OTLP could not
 # carry this distinction: blitz hardcodes service.name="blitz" on OTLP output
@@ -29,8 +33,11 @@
 # them separable.
 #
 # Routes are FIRST MATCH WINS, so the unconditioned catch-all must stay last.
-# Anything landing in `unmatched` means a stream's appname changed or a new
-# generator was added without a route -- watch the debug destination for it.
+# The `unmatched` route id below is still declared, but grrcon-gateway no longer
+# maps it to a destination. Bindplane then renders it as
+# throughputmeasurement -> forward -> nop, so unmatched records are discarded
+# while the branch stays measurable. Keeping the id means a debug sink can be
+# wired back in for a session without editing this connector.
 apiVersion: bindplane.observiq.com/v1
 kind: Connector
 metadata:

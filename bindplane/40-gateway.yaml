@@ -21,25 +21,6 @@ spec:
 apiVersion: bindplane.observiq.com/v1
 kind: Destination
 metadata:
-  name: grrcon-debug-out
-spec:
-  type: custom
-  parameters:
-  - name: telemetry_types
-    value:
-    - Logs
-    - Metrics
-    - Traces
-  - name: configuration
-    value: |-
-      debug:
-        verbosity: basic
-        sampling_initial: 5
-        sampling_thereafter: 200
----
-apiVersion: bindplane.observiq.com/v1
-kind: Destination
-metadata:
   name: Splunk-HEC
 spec:
   type: splunkhec_v2
@@ -94,9 +75,6 @@ spec:
       - id: cef
         components:
         - destinations/d-Splunk-HEC
-      - id: unmatched
-        components:
-        - destinations/d-grrcon-debug-out
   destinations:
   - id: d-Google-SecOps-Linux
     name: Google-SecOps-Linux
@@ -108,8 +86,6 @@ spec:
     name: Elastic
   - id: d-Splunk-HEC
     name: Splunk-HEC
-  - id: d-grrcon-debug-out
-    name: grrcon-debug-out
   rollout:
     type: progressive
     parameters:

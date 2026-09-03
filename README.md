@@ -425,9 +425,13 @@ not promise the room that data lands anywhere.
   **`rpc error: code = Unauthenticated`**, because `credentials.json` is a mock.
   The pipeline still runs.
 
-`grrcon-debug-out` is no longer a proof-of-flow sink -- it only receives
-*unmatched* logs. An empty debug output now means routing is working. See
-"Verify" for how to confirm flow instead.
+`grrcon-debug-out` has been **removed** from `grrcon-gateway`, and with it the
+`unmatched` catch-all wiring. The router's five conditioned routes remain; the
+`unmatched` route id is still declared in `10-connector-router.yaml` but nothing
+is wired to it, so unmatched logs are discarded via a synthesised `nop`
+pipeline -- still throughput-measured, just no longer readable. See "Verify" for
+how to confirm flow, and [Detecting a misroute without the catch-all
+sink](#detecting-a-misroute-without-the-catch-all-sink) for the detail.
 
 ### Why `Google-SecOps-Linux`, not `Google-SecOps`
 
@@ -553,9 +557,11 @@ not take effect -- check for `balancer_name: round_robin` and
 docker exec bdot-edge-01 sh -c 'cat ./config.yaml' | grep -A4 otlp_grpc
 ```
 
-**Grep gotcha:** the debug exporter logs `"msg":"Logs"` with component id
-`debug/grrcon-debug-out`. Older collector builds wrote `LogsExporter`; grepping
-for that against v1.106 silently returns zero and looks exactly like an outage.
+**No debug exporter any more.** `grrcon-gateway` used to carry
+`debug/grrcon-debug-out`, which logged `"msg":"Logs"` and served as a
+proof-of-flow sink. It is gone, so grepping a gateway collector for `"msg":"Logs"`
+now legitimately returns zero -- use the per-exporter error counts above
+instead.
 
 ## Routing (gateway tier)
 
@@ -587,7 +593,58 @@ spec:
       name: Google-SecOps-Linux
 ```
 
-Routes are **first match wins**, so the unconditioned catch-all must stay last.
+Routes are **first match wins**. The connector still declares an unconditioned
+`unmatched` route last, but `grrcon-gateway` no longer wires it to a
+destination -- so anything not matching the five conditions is dropped.
+
+### Detecting a misroute without the catch-all sink
+
+Removing `grrcon-debug-out` cost less than it looks like. Leaving the `unmatched`
+route unwired does **not** produce a dangling route: Bindplane synthesises a
+terminal pipeline that discards the data explicitly, and it keeps a
+`throughputmeasurement` processor on the way there. From a gateway collector's
+rendered config:
+
+```yaml
+logs/c-c-grrcon-router__unmatched:
+    receivers:  [routing/grrcon-router__logs]
+    processors: [throughputmeasurement/_p1_logs_c-c-grrcon-router__unmatched]
+    exporters:  [forward/d-no_routes__c-c-grrcon-router__unmatched]
+logs/d-no_routes__c-c-grrcon-router__unmatched:
+    receivers:  [forward/d-no_routes__c-c-grrcon-router__unmatched]
+    exporters:  [nop/c-c-grrcon-router]
+```
+
+So **the catch-all is still measured** -- a misroute still shows as non-zero
+throughput on the router's unmatched branch in the Bindplane UI, exactly as
+before. What is gone is the ability to read the offending *records*: the `nop`
+exporter prints nothing, where the debug exporter used to print the payload.
+
+That makes the practical difference narrow. Diagnosing a misroute is now:
+
+1. **Bindplane UI** -- check throughput on the router's `unmatched` branch. Still
+   the fastest signal, and unchanged by this removal.
+2. **Per-exporter output on the gateway tier** -- one column drops to zero while
+   the others hold:
+
+```bash
+for d in Elastic Splunk Dynatrace googlecloud; do
+  n=0
+  for i in $(seq -w 1 10); do
+    n=$((n + $(docker logs --since 60s bdot-$i 2>&1 | grep -ci "$d")))
+  done
+  printf '%-12s %s\n' "$d" "$n"
+done
+```
+
+   **`SecOps` is deliberately not in that list.** The chronicle exporter mostly
+   fails quietly -- measured at 4 log lines in 5 minutes against Splunk's 423 in
+   60 seconds -- so a zero for SecOps over a short window means nothing. Use the
+   UI throughput for the winsec branch instead.
+
+3. **Read the records** -- only if you need the payload, wire a temporary debug
+   destination to `unmatched`. See the snippet in `docs/demo-json-parsing.md`; it
+   is deliberately not part of the committed configuration.
 
 ### Every source stamps `log_type` — but not all in the same place
 
@@ -602,9 +659,11 @@ that sources put it in different places:
 
 `apache_common` regex-parses into the body, so its `log_type` ends up a body
 field and the only attribute on the record is `log.file.name`. Getting this
-wrong matches nothing **silently** and dumps the stream into the catch-all — so
-if a stream disappears, check the debug destination first, then check which side
-of the record its `log_type` is on.
+wrong matches nothing **silently** and dumps the stream into the catch-all,
+which is now unwired — so the records are discarded, though the branch is still
+throughput-measured. See [Detecting a misroute without the catch-all
+sink](#detecting-a-misroute-without-the-catch-all-sink), then check which side of
+the record its `log_type` is on.
 
 ### Record shape: raw body, metadata in attributes
 
@@ -710,7 +769,10 @@ expecting a RFC3339MICRO timestamp or a nil value [col 32]
 **The failure mode is silent.** The parser does not drop the record, it passes
 the raw line through *unparsed*. Throughput looks perfectly healthy, collectors
 stay green, and every single log lands in the catch-all because `appname` never
-got created. It looks exactly like a broken routing condition.
+got created. With the catch-all unwired those records are discarded rather than
+printed, so no exporter errors appear anywhere -- but the unmatched branch's
+throughput still climbs, which is the tell. It looks exactly like a broken
+routing condition.
 
 RFC 3164 uses `Jan _2 15:04:05` with no fractional seconds, so it parses
 cleanly. Both sides must agree:
