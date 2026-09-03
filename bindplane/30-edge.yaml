@@ -1,7 +1,7 @@
-# The ingress is the native ingestion point: two file-tailing sources and three
-# tcp listeners. Everything leaves through the Bindplane Gateway destination to
-# bdot-pool -- the worker tier fans out to the real backends via its routing
-# connector.
+# The edge tier is the native ingestion point: two file-tailing sources and
+# three tcp listeners. Everything leaves through the Bindplane Gateway
+# destination to bdot-pool -- the gateway tier fans out to the real backends via
+# its routing connector.
 #
 # Logs only. The OTLP source was removed once nothing used it; the native
 # sources here are all logs-only, so this tier carries no metrics or traces.
@@ -14,7 +14,7 @@
 apiVersion: bindplane.observiq.com/v1
 kind: Destination
 metadata:
-  name: grrcon-worker-pool
+  name: grrcon-gateway-pool
 spec:
   type: bindplane_gateway
   parameters:
@@ -50,35 +50,35 @@ spec:
       logs:
       - id: '0'
         components:
-        - destinations/d-grrcon-worker-pool
+        - destinations/d-grrcon-gateway-pool
   - id: s-grrcon-cef-in
     name: grrcon-cef-in
     routes:
       logs:
       - id: '1'
         components:
-        - destinations/d-grrcon-worker-pool
+        - destinations/d-grrcon-gateway-pool
   - id: s-grrcon-panos-in
     name: grrcon-panos-in
     routes:
       logs:
       - id: '2'
         components:
-        - destinations/d-grrcon-worker-pool
+        - destinations/d-grrcon-gateway-pool
   - id: s-grrcon-appjson-in
     name: grrcon-appjson-in
     routes:
       logs:
       - id: '3'
         components:
-        - destinations/d-grrcon-worker-pool
+        - destinations/d-grrcon-gateway-pool
   - id: s-grrcon-winsec-in
     name: grrcon-winsec-in
     routes:
       logs:
       - id: '4'
         components:
-        - destinations/d-grrcon-worker-pool
+        - destinations/d-grrcon-gateway-pool
   destinations:
-  - id: d-grrcon-worker-pool
-    name: grrcon-worker-pool
+  - id: d-grrcon-gateway-pool
+    name: grrcon-gateway-pool
