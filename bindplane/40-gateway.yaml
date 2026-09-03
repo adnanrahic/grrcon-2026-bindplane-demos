@@ -63,6 +63,7 @@ kind: Configuration
 metadata:
   name: grrcon-gateway
   labels:
+    agent-type: observiq-otel-collector
     platform: linux
 spec:
   sources:
@@ -107,16 +108,6 @@ spec:
     name: Splunk-HEC
   - id: d-grrcon-debug-out
     name: grrcon-debug-out
-  # Progressive rollout: new versions reach env=canary (bdot-01, bdot-02) first,
-  # then env=prod (bdot-03..10), pausing on the first collector error.
-  #
-  # This is label-based staging, which `bindplane rollout start` cannot express
-  # -- its flags (--initial/--multiplier/--max) only phase by COUNT. The staging
-  # lives on the configuration resource instead, so it applies to every rollout
-  # of this config however it is triggered.
-  #
-  # phaseAgentCount type: adaptive lets the server size each phase from the
-  # collector count; initial/multiplier/maximum are ignored in that mode.
   rollout:
     type: progressive
     parameters:

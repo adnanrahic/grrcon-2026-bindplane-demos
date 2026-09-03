@@ -1,3 +1,15 @@
+# Files in this directory are numbered because `bindplane apply -f bindplane/`
+# processes them in filename order, and resources must exist before anything
+# references them. Alphabetical order broke this twice:
+#   - a Connector must be applied before the Configuration using it, otherwise
+#     apply fails with "unknown Connector"
+#   - the five Sources must exist before 30-edge.yaml, which references them,
+#     otherwise apply fails with "unknown Source"
+# Both only surface against a FRESH account -- with the resources already
+# present, a wrong order silently works.
+#
+#   10 connector -> 20 sources -> 30 edge -> 40 gateway -> 50 fleets
+#
 # Routing connector: splits the merged worker-tier log stream back into its five
 # original sources and sends each to its own destination.
 #

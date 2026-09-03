@@ -3,6 +3,7 @@
 #
 # `file_path` is the EXACT file, not a glob. lumberjack rotates to siblings like
 # access-2026-09-02T....log; a glob would tail those too and re-read history.
+---
 apiVersion: bindplane.observiq.com/v1
 kind: Source
 metadata:
@@ -10,29 +11,30 @@ metadata:
 spec:
   type: apache_common
   parameters:
-    - name: file_path
-      value:
-        - /var/log/apache2/access.log
-    - name: start_at
-      value: end
-    - name: parse
-      value: true
+  - name: file_path
+    value:
+    - "/var/log/apache2/access.log"
+  - name: start_at
+    value: end
+  - name: parse
+    value: true
 ---
 apiVersion: bindplane.observiq.com/v2
 kind: Configuration
 metadata:
   name: grrcon-apache
   labels:
+    agent-type: observiq-otel-collector
     platform: linux
 spec:
   sources:
-    - id: s-grrcon-apache-in
-      name: grrcon-apache-in
-      routes:
-        logs:
-          - id: "0"
-            components:
-              - destinations/d-Elastic
+  - id: s-grrcon-apache-in
+    name: grrcon-apache-in
+    routes:
+      logs:
+      - id: '0'
+        components:
+        - destinations/d-Elastic
   destinations:
-    - id: d-Elastic
-      name: Elastic
+  - id: d-Elastic
+    name: Elastic

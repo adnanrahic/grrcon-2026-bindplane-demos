@@ -265,7 +265,7 @@ without it.
 `Google-SecOps-Linux`, `Elastic` and `Dynatrace` are pre-existing resources in
 the Bindplane account, referenced by name rather than redefined so they keep
 their real credentials. `bindplane apply` against a **fresh** account needs those
-three created first. `Splunk-HEC` is defined in `bindplane/gateway.yaml`.
+three created first. `Splunk-HEC` is defined in `bindplane/40-gateway.yaml`.
 
 ### Known state of each backend
 
@@ -276,7 +276,7 @@ not promise the room that data lands anywhere.
 - **Google SecOps** -- dummy credentials by design. Loads, fails at the network,
   logs nothing noisy.
 - **Splunk HEC** -- placeholder token and `REPLACE_ME.splunkcloud.com` hostname.
-  Replace both in `bindplane/gateway.yaml` to make it real.
+  Replace both in `bindplane/40-gateway.yaml` to make it real.
 - **Elastic** -- real endpoint, returns **HTTP 404**. Tenant is stale or the
   OTLP path has changed.
 - **Dynatrace** -- real endpoint, returns **HTTP 404**. Same.
@@ -413,7 +413,7 @@ for that against v1.106 silently returns zero and looks exactly like an outage.
 The ingress forwards every source to `bdot-pool`, so the worker tier splits the
 merged stream back apart and fans it out to the five backends.
 
-`bindplane/connector-router.yaml` defines a `kind: Connector` of type `routing`. The
+`bindplane/10-connector-router.yaml` defines a `kind: Connector` of type `routing`. The
 worker configuration sends logs into it, and it fans them out by source.
 
 ### Wiring, in three places
@@ -567,18 +567,31 @@ RFC 3164 uses `Jan _2 15:04:05` with no fractional seconds, so it parses
 cleanly. Both sides must agree:
 
 - `docker-compose.blitz.yaml`: `BLITZ_OUTPUT_SYSLOG_RFC: "3164"`
-- `bindplane/edge.yaml`: `protocol: rfc3164`
+- `bindplane/30-edge.yaml`: `protocol: rfc3164`
 
 Cost: no sub-second precision in the syslog *header*. Message bodies keep their
 own timestamps, so PAN-OS and the JSON stream are unaffected.
 
 ### Connector apply ordering
 
-A Connector and a Configuration that references it **cannot live in the same
-file** -- apply renders the config before committing the connector and fails
-with `unknown Connector: grrcon-router:1`. Separate files are fine, as long as
-the connector's filename sorts first. `connector-router.yaml` before `gateway.yaml` works;
-renaming either could break `bindplane apply -f bindplane/`.
+`bindplane apply -f bindplane/` processes files in **filename order**, and a
+resource must exist before anything references it. Two dependencies bite:
+
+- a **Connector** cannot share a file with the Configuration that uses it --
+  apply renders the config before committing the connector and fails with
+  `unknown Connector`. Separate files, connector first.
+- the five **Sources** must exist before `30-edge.yaml`, which references them,
+  or apply fails with `unknown Source`.
+
+Hence the numeric prefixes:
+
+```
+10-connector-router  ->  20-source-*  ->  30-edge  ->  40-gateway  ->  50-fleets
+```
+
+**Both failures only surface against a fresh account.** With the resources
+already present a wrong order silently works, so this stayed hidden until the
+account was wiped and everything was recreated from scratch.
 
 ## What blitz generates
 
@@ -905,6 +918,20 @@ bindplane label agent --selector fleet=grrcon-gateway configuration=grrcon-gatew
 
 Applying the configurations before `docker compose up -d` avoids this entirely.
 
+## Collector Type
+
+Each configuration carries `agent-type: observiq-otel-collector` in
+`metadata.labels` — that is what the UI shows as **Collector Type**. Without it
+the field renders as `-`. `platform: linux` sits alongside it:
+
+```yaml
+metadata:
+  name: grrcon-edge
+  labels:
+    agent-type: observiq-otel-collector
+    platform: linux
+```
+
 ## Rebuilding after the account loses the resources
 
 If the `grrcon-*` configurations are deleted from Bindplane, the collectors keep
@@ -972,12 +999,12 @@ docker compose down -v                             # agents reconnect with same 
 | `.env.example` | template |
 | `credentials.json` | dummy SecOps service account -- gitignored, generate per step 2 |
 | `logs/apache2/`, `logs/cef/` | native-format files written by blitz, tailed by the collectors -- gitignored |
-| `bindplane/source-apache.yaml` | `apache_common` (file) -> Elastic |
-| `bindplane/source-cef.yaml` | `common_event_format` (file) -> Splunk HEC |
-| `bindplane/source-panos.yaml` | `tcp` :5141 -> Dynatrace |
-| `bindplane/source-winsec.yaml` | `tcp` :5142 -> Google SecOps |
-| `bindplane/source-appjson.yaml` | `tcp` :5143 (JSON parsed) -> Dynatrace |
-| `bindplane/fleets.yaml` | the `grrcon-gateway`, `grrcon-edge` and `grrcon-sources` fleets |
-| `bindplane/edge.yaml` | `grrcon-edge` -- the five native sources -> gateway pool |
-| `bindplane/connector-router.yaml` | routing connector -- splits the pooled stream by `log_type`. Named `connector-` so it sorts before `gateway.yaml`: a connector must be applied before the config referencing it |
-| `bindplane/gateway.yaml` | `grrcon-gateway` -- gateway source -> router -> five destinations, progressive rollout |
+| `bindplane/20-source-apache.yaml` | `apache_common` (file) -> Elastic |
+| `bindplane/20-source-cef.yaml` | `common_event_format` (file) -> Splunk HEC |
+| `bindplane/20-source-panos.yaml` | `tcp` :5141 -> Dynatrace |
+| `bindplane/20-source-winsec.yaml` | `tcp` :5142 -> Google SecOps |
+| `bindplane/20-source-appjson.yaml` | `tcp` :5143 (JSON parsed) -> Dynatrace |
+| `bindplane/50-fleets.yaml` | the `grrcon-gateway`, `grrcon-edge` and `grrcon-sources` fleets |
+| `bindplane/30-edge.yaml` | `grrcon-edge` -- the five native sources -> gateway pool |
+| `bindplane/10-connector-router.yaml` | routing connector -- splits the pooled stream by `log_type`. numbered `10-` so it applies first: a connector must exist before the config referencing it |
+| `bindplane/40-gateway.yaml` | `grrcon-gateway` -- gateway source -> router -> five destinations, progressive rollout |

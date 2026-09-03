@@ -40,6 +40,7 @@ kind: Configuration
 metadata:
   name: grrcon-edge
   labels:
+    agent-type: observiq-otel-collector
     platform: linux
 spec:
   sources:
