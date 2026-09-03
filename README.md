@@ -2,10 +2,14 @@
 
 Twenty-five BDOT collectors in Docker, all managed from Bindplane Cloud over OpAMP.
 
-Three tiers, each its own fleet:
+Three tiers, seven fleets -- the two multi-collector tiers get one fleet each,
+and every source collector gets its own:
 
-- **`grrcon-sources`** -- five collectors, one per source+destination pipeline,
-  each with its own configuration, shipping straight to a backend.
+- **`grrcon-source-apache` / `-cef` / `-panos` / `-winsec` / `-appjson`** -- five
+  collectors, one per source+destination pipeline, each with its own
+  configuration, shipping straight to a backend. One fleet per collector, so any
+  single source can be upgraded, restarted or rolled on its own. They all keep
+  `role=source`, so `--selector role=source` still addresses the tier at once.
 - **`grrcon-edge`** -- ten collectors (`bdot-edge-01..10`) all running the same
   configuration: the five native sources, forwarding to the gateway pool.
   Simulates a fleet of edge hosts.
@@ -21,8 +25,8 @@ demonstrates fleet management, but no longer carries blitz log traffic.
   blitz-cef ─────file──────▶ bdot-cef     (grrcon-cef)     ──▶ Splunk HEC
   blitz-apache-native ─file▶ bdot-apache  (grrcon-apache)  ──▶ Elastic
 
-  GATEWAY TIER -- the ingress runs the same five native sources, and
-  forwards EVERYTHING to the pool; the gateway tier does the fan-out.
+  EDGE + GATEWAY TIERS -- the ten edge collectors run the same five native
+  sources and forward EVERYTHING to the pool; the gateway tier does the fan-out.
 
   apache (file) ┐
   cef (file)    │   bdot-edge-01..10
@@ -50,7 +54,7 @@ blueprint without disturbing the others.
 
 **`bdot-pool` is a shared Docker network alias**, declared by all ten gateway collectors.
 Docker's embedded DNS returns all ten container IPs for that one name, so the
-ingress destination targets a single hostname with gRPC load balancing enabled.
+edge destination targets a single hostname with gRPC load balancing enabled.
 Add or remove workers and the Bindplane config never changes.
 
 **Each edge collector owns its ingest.** `bdot-panos`, `bdot-winsec` and
@@ -59,26 +63,27 @@ instead. blitz reaches them by container name on `bdot-net`, so the published
 ports exist only so you can send test traffic from the laptop.
 
 **The gateway tier is logs-only.** The OTLP source was removed once nothing used
-it, so the ingress publishes only 13133 (health). Every native source is
+it, so the edge tier publishes no ports at all. Every native source is
 logs-only, and the worker gateway source is now `telemetry_types: [Logs]` — which
 also stops v2 auto-generating metrics/traces routes to every destination.
 
 Re-adding OTLP means restoring three things together: the source and its route,
-the 4317/4318 ports on `bdot-ingress`, and `Metrics`/`Traces` on the worker
-gateway source.
+the 4317/4318 ports on the `bdot-edge-*` containers, and `Metrics`/`Traces` on
+the worker gateway source.
 
-**The ingress lives in its own fleet.** A collector can belong to exactly one
-fleet at a time, so `fleet=` is the one mutually exclusive label here: the
-ingress is `fleet=grrcon-edge`, the ten gateways are `fleet=grrcon-gateway`. The front
-door can be upgraded, restarted, or rolled without touching the pool, and a
-fleet-wide action aimed at the gateway tier can never reach it.
+**The edge tier lives in its own fleet.** A collector can belong to exactly one
+fleet at a time, so `fleet=` is the one mutually exclusive label here: the ten
+edge collectors are `fleet=grrcon-edge`, the ten gateways are
+`fleet=grrcon-gateway`. The front door can be upgraded, restarted, or rolled
+without touching the pool, and a fleet-wide action aimed at the gateway tier can
+never reach it.
 
-**The ingress is not labeled `env=`.** `bdot-winsec` is the only edge collector
+**The edge tier is not labeled `env=`.** `bdot-winsec` is the only source-tier collector
 that needs `credentials.json` -- it is the one exporting to Google SecOps, and
 the chronicle exporter reads that file at startup.
 
-**Agent IDs are pinned ULIDs** (`...BD0T00` through `...BD0T10`), so the same
-eleven agents reconnect after any restart -- even `docker compose down -v`.
+**Agent IDs are pinned ULIDs**, so the same twenty-five agents reconnect after
+any restart -- even `docker compose down -v`.
 Without pinning, every teardown mints new agents and orphans the old ones.
 
 **Both configurations use `apiVersion: bindplane.observiq.com/v2`**, which adds
@@ -130,7 +135,7 @@ working exporter that cannot reach its backend.
 `credentials.json` is gitignored. Never commit it, dummy or not.
 
 Compose mounts it read-only at `/opt/credentials.json` on the **ten gateway collectors
-only**; the ingress has no SecOps exporter and does not get it.
+only**; the edge tier has no SecOps exporter and does not get it.
 
 ### 3. Shared log directory
 
@@ -177,7 +182,7 @@ bindplane rollout start grrcon-edge
 **The order is not cosmetic.** A collector's `configuration=` label binds only
 when its value *changes* while the named configuration already exists. Start the
 collectors first and they register, evaluate the label against a configuration
-that does not exist yet, and never re-check -- leaving all 11 sitting at
+that does not exist yet, and never re-check -- leaving all 25 sitting at
 `CONFIGURATION: -` forever. Neither a container restart nor re-setting the label
 to the same value fixes it. See "Recovering an unbound collector" below.
 
@@ -185,9 +190,9 @@ to the same value fixes it. See "Recovering an unbound collector" below.
 rollout is what pushes them to collectors. A freshly applied configuration sits
 at `pendingVersion` with agents still on the old pipeline until you roll it out.
 
-Roll the gateway tier before the edge collector so the pool is listening on 4317 before the
-front door starts forwarding. Out of order it still converges -- the exporter
-retries -- but you will see a burst of `connection refused` in the ingress log.
+Roll the gateway tier before the edge tier so the pool is listening on 4317
+before the front door starts forwarding. Out of order it still converges -- the exporter
+retries -- but you will see a burst of `connection refused` in the edge logs.
 
 ## Pipelines
 
@@ -204,13 +209,13 @@ Five independent pipelines, one Bindplane configuration each:
 Each source stamps its own `log_type`, so there is no routing connector and no
 `appname` coupling: **the collector a stream lands on is its identity.**
 
-### The ingress mirrors all five
+### The edge tier mirrors all five
 
 `grrcon-edge` references the same five Source resources and routes each one
 directly to its own destination, so the same pipelines exist in two places. Only
 the file-based ones actually dual-ingest:
 
-| Source | On the ingress |
+| Source | On the edge tier |
 |---|---|
 | `grrcon-apache-in` (file) | **receives** — two collectors can tail one file, each keeping its own checkpoint |
 | `grrcon-cef-in` (file) | **receives** — same |
@@ -234,31 +239,65 @@ If you want the volume without the duplication, give each collector its own file
 (one blitz `file` output per collector) or move the file sources onto a
 single-collector configuration and leave the tcp sources on the fleet.
 
-The three tcp sources do not amplify: blitz opens one connection to the
-`bdot-edge-pool` alias, so each tcp stream lands on whichever collector Docker
-resolves — one of the ten, not all ten.
+The three tcp sources do not amplify: blitz holds one long-lived connection per
+stream, so each tcp stream lands on exactly one collector, not all ten. All
+three are pinned to `bdot-edge-01` (see [Duplicate generators](#duplicate-generators))
+so that one agent shows all five sources at once.
 
 ### Duplicate generators
 
 **blitz supports one output per process**, so a TCP stream cannot be sent to
-both its edge collector and the ingress. The `*-gw` services are second
-instances of the same generators pointed at `bdot-ingress`:
+both its source-tier collector and the edge tier. The `*-gw` services are second
+instances of the same generators pointed at the edge tier:
 
 | Duplicate | Target | Mirrors |
 |---|---|---|
-| `blitz-winsec-gw` | `bdot-ingress:5142` | `blitz-winsec` |
-| `blitz-palo-alto-gw` | `bdot-ingress:5141` | `blitz-palo-alto` |
-| `blitz-json-gw` | `bdot-ingress:5143` | `blitz-json` |
+| `blitz-winsec-gw` | `bdot-edge-01:5142` | `blitz-winsec` |
+| `blitz-palo-alto-gw` | `bdot-edge-01:5141` | `blitz-palo-alto` |
+| `blitz-json-gw` | `bdot-edge-01:5143` | `blitz-json` |
 
 This **doubles** those streams' volume at their backends — each event arrives
-once via the edge collector and once through the pool. The two file streams need
-no duplicate: both collectors tail the same file.
+once via its source collector and once through edge → pool → worker. The two
+file streams need no duplicate: both collectors tail the same file.
 
-The ingress's TCP ports are deliberately **not published**: `bdot-panos`,
+**Why a named collector and not the `bdot-edge-pool` alias.** blitz opens ONE
+tcp connection per stream and keeps it for the life of the process. Docker's
+embedded DNS resolves the alias once, at connect time, so that connection is
+pinned to a single container — the alias load-balances new connections, and
+there are never any new connections. Aimed at the alias, the three streams
+scatter across three arbitrary collectors:
+
+| Collector | Established inbound |
+|---|---|
+| `bdot-edge-01` | 5141 — panos |
+| `bdot-edge-02` | 5143 — appjson |
+| `bdot-edge-09` | 5142 — winsec |
+| the other seven | none |
+
+Bindplane previews a configuration from **one agent**, so on any agent you pick
+at most one of the three tcp sources has data and the other two look broken —
+while apache and cef always look healthy, because all ten tail the same files.
+Pinning all three to `bdot-edge-01` makes that one agent show all five sources
+live. Set `EDGE_TARGET=bdot-edge-pool` to get the scattered behaviour back.
+
+To verify which collectors hold connections (the listeners are dual-stack, so
+they appear in `/proc/net/tcp6`, and a `/proc/net/tcp` check looks empty):
+
+```bash
+# ports print as hex: 1415 = 5141 panos, 1416 = 5142 winsec, 1417 = 5143 appjson
+for c in $(docker ps --format '{{.Names}}' | grep '^bdot-edge-' | sort); do
+  printf '%-14s %s\n' "$c" "$(docker exec $c cat /proc/net/tcp6 \
+    | awk 'NR>1 && $4=="01" {split($2,a,":"); print a[2]}' \
+    | grep -E '^(1415|1416|1417)$' | sort | uniq -c | tr '\n' ' ')"
+done
+```
+
+The edge tier's TCP ports are deliberately **not published**: `bdot-panos`,
 `bdot-winsec` and `bdot-appjson` already publish 5141/5142/5143, and a second
-publisher would collide on the host.
+publisher would collide on the host. The `*-gw` generators do not need them
+published — they reach `bdot-edge-01` over `bdot-net` by container name.
 
-Because the ingress now exports to Google SecOps, it mounts `credentials.json`
+Because the edge tier now exports to Google SecOps, it mounts `credentials.json`
 — the chronicle exporter reads it at startup and the collector will not start
 without it.
 
@@ -335,15 +374,19 @@ bindplane delete configuration grrcon-v2-probe --force
 ## Verify
 
 ```bash
-docker compose ps                                     # 11 up
-bindplane get fleets                                  # grrcon + grrcon-edge
+docker compose ps                                     # 25 up
+bindplane get fleets | grep grrcon                    # 7 grrcon fleets
 bindplane get agents --selector fleet=grrcon-gateway  # 10 gateways
-bindplane get agents --selector fleet=grrcon-edge  # 1 edge
-curl -s localhost:13133                               # ingress health
+bindplane get agents --selector fleet=grrcon-edge     # 10 edge
+bindplane get agents --selector role=source           # 5 source collectors
+bindplane get agents --selector fleet=grrcon-source-apache   # 1
 ```
 
-There is no single selector covering all 11 -- the fleet split is what makes
-that true. Use `role=worker` / `role=ingress` to slice by tier.
+There is no single selector covering all 25 -- the fleet split is what makes
+that true. Use `role=edge` / `role=gateway` / `role=source` to slice by tier:
+`role=` is the non-exclusive label, which is why the source tier is still
+addressable as a unit after being split into five fleets.
+No collector publishes 13133, so there is no host-side health curl.
 
 Confirm every collector actually bound to a configuration; a `-` in the
 `CONFIGURATION` column means it did not:
@@ -398,10 +441,10 @@ connection counts some workers run 2-3x others. That is not a fault.
 
 If one collector has everything and the rest are at zero, gRPC load balancing did
 not take effect -- check for `balancer_name: round_robin` and
-`endpoint: dns:///bdot-pool:4317` in the ingress's effective config:
+`endpoint: dns:///bdot-pool:4317` in an edge collector's effective config:
 
 ```bash
-docker exec bdot-ingress sh -c 'cat ./config.yaml' | grep -A3 otlp_grpc
+docker exec bdot-edge-01 sh -c 'cat ./config.yaml' | grep -A4 otlp_grpc
 ```
 
 **Grep gotcha:** the debug exporter logs `"msg":"Logs"` with component id
@@ -410,7 +453,7 @@ for that against v1.106 silently returns zero and looks exactly like an outage.
 
 ## Routing (gateway tier)
 
-The ingress forwards every source to `bdot-pool`, so the worker tier splits the
+The edge tier forwards every source to `bdot-pool`, so the worker tier splits the
 merged stream back apart and fans it out to the five backends.
 
 `bindplane/10-connector-router.yaml` defines a `kind: Connector` of type `routing`. The
@@ -469,7 +512,7 @@ shape takes two things, and neither is the default.
 **1. `parse_to: attributes` on the syslog source.** The default (`body`) rewrites
 the body into a map of syslog parts, which no blueprint matches.
 
-**2. A transform processor on the ingress.** `parse_to: attributes` alone still
+**2. A transform processor on the edge tier.** `parse_to: attributes` alone still
 leaves the body as the *whole* raw line, syslog header included:
 
 ```
@@ -485,7 +528,7 @@ The parser already extracted the clean payload into `attributes["message"]`, so
 ```
 
 It is attached to the syslog source only, so the OTLP source is untouched, and it
-runs on the ingress so every worker receives clean records.
+runs on the edge tier so every worker receives clean records.
 
 The result:
 
@@ -774,9 +817,12 @@ PAN_RATE=500ms         PAN_WORKERS=2
 JSON_RATE=1s           JSON_WORKERS=1
 CEF_RATE=1s            CEF_WORKERS=1
 APACHE_RATE=1s         APACHE_WORKERS=1
-COLLECTOR_HOST=bdot-ingress               COLLECTOR_NETWORK=bdot-net
-PANOS_TCP_PORT=5141    WINSEC_TCP_PORT=5142    APPJSON_TCP_PORT=5143
+EDGE_TARGET=bdot-edge-01                  COLLECTOR_NETWORK=bdot-net
 ```
+
+`EDGE_TARGET` picks which edge collector the three `*-gw` generators feed; set it
+to `bdot-edge-pool` to scatter them across the tier instead. The TCP ports are
+hardcoded in compose, not tunable.
 
 ## Native formats: files, not the wire
 
@@ -800,10 +846,10 @@ output writes it byte-for-byte with no wrapper:
 124.159.111.209 - - [02/Sep/2026:12:16:27 +0000] "DELETE /api/v1/products HTTP/1.1" 200 9482648
 ```
 
-`bdot-apache` (fleet `grrcon-edge`) tails `/var/log/apache2/access.log` with the
-`apache_common` source and ships **straight
+`bdot-apache` (fleet `grrcon-source-apache`) tails `/var/log/apache2/access.log` with
+the `apache_common` source and ships **straight
 to Elastic**, bypassing the worker pool — which is what makes this path additive:
-the ingress, workers and router are untouched by it.
+the edge, worker and router tiers are untouched by it.
 
 Verified parse output:
 
@@ -952,6 +998,9 @@ Applying the configurations before `docker compose up -d` avoids this entirely.
   and `cef` streams, where the source type parses on ingest and you write no
   processors at all, plus the silent failure mode when the data does not match
   what the parser expects.
+- [`docs/demo-winsec-secops.md`](docs/demo-winsec-secops.md) — Windows Events to
+  Google SecOps, where a native source exists but the `windowseventlog` receiver
+  needs a Windows host, so the XML is parsed and standardized downstream instead.
 
 Run them in that order — hand-built, then shipped blueprint, then native source.
 Each ran on the same collectors, routing and destinations; only the amount of
@@ -974,9 +1023,9 @@ metadata:
 ## Rebuilding after the account loses the resources
 
 If the `grrcon-*` configurations are deleted from Bindplane, the collectors keep
-running but lose their pipelines -- the ingress stops listening on 4317 and
-generators fail with `connection refused`. Symptoms look like a broken generator;
-the cause is an empty configuration.
+running but lose their pipelines -- the edge collectors stop listening on
+5141-5143 and the generators fail with `connection refused`. Symptoms look like a
+broken generator; the cause is an empty configuration.
 
 Rebuild from source and roll out:
 
@@ -1008,9 +1057,9 @@ To make a label edit stick, drop that collector's volume so the file is
 re-seeded:
 
 ```bash
-docker compose rm -sf bdot-ingress
-docker volume rm grrcon-demos_bdot-ingress-storage
-docker compose up -d bdot-ingress
+docker compose rm -sf bdot-edge-01
+docker volume rm grrcon-demos_bdot-edge-01-storage
+docker compose up -d bdot-edge-01
 ```
 
 Because the agent ID is pinned in compose, the *same* agent reconnects under the
@@ -1032,8 +1081,8 @@ docker compose down -v                             # agents reconnect with same 
 
 | File | Purpose |
 |---|---|
-| `docker-compose.yaml` | 11 collectors, network alias, per-collector volumes, credentials mount |
-| `docker-compose.blitz.yaml` | telemetry generators feeding `bdot-ingress:4317` |
+| `docker-compose.yaml` | 25 collectors, network aliases, per-collector volumes, credentials mount |
+| `docker-compose.blitz.yaml` | telemetry generators feeding tcp 5141-5143 and the tailed log files |
 | `.env` | secret key and endpoint -- gitignored, never commit |
 | `.env.example` | template |
 | `credentials.json` | dummy SecOps service account -- gitignored, generate per step 2 |
@@ -1043,7 +1092,7 @@ docker compose down -v                             # agents reconnect with same 
 | `bindplane/20-source-panos.yaml` | `tcp` :5141 -> Dynatrace |
 | `bindplane/20-source-winsec.yaml` | `tcp` :5142 -> Google SecOps |
 | `bindplane/20-source-appjson.yaml` | `tcp` :5143 (JSON parsed) -> Dynatrace |
-| `bindplane/50-fleets.yaml` | the `grrcon-gateway`, `grrcon-edge` and `grrcon-sources` fleets |
+| `bindplane/50-fleets.yaml` | `grrcon-gateway`, `grrcon-edge`, and one `grrcon-source-*` fleet per source collector |
 | `bindplane/30-edge.yaml` | `grrcon-edge` -- the five native sources -> gateway pool |
 | `bindplane/10-connector-router.yaml` | routing connector -- splits the pooled stream by `log_type`. numbered `10-` so it applies first: a connector must exist before the config referencing it |
 | `bindplane/40-gateway.yaml` | `grrcon-gateway` -- gateway source -> router -> five destinations, progressive rollout |

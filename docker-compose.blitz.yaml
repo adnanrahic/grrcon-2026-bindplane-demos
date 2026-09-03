@@ -5,22 +5,23 @@
 #   3. Mixed-format JSON app log-> no blueprint covers it         (json)
 #   4. Universal CEF            -> exercises the CEF parser       (filegen)
 #
-# These are data sources only. They feed the gateway topology in
-# docker-compose.yaml by sending OTLP to bdot-ingress:4317 over bdot-net,
-# exactly as an external app would. Bring the collectors up first:
+# These are data sources only. They feed the topology in docker-compose.yaml
+# over bdot-net, exactly as external hosts would -- by raw tcp to the collectors'
+# tcp sources (5141-5143) and by writing the native-format files the file
+# sources tail. Nothing here speaks OTLP; that source was removed from the
+# pipelines. Bring the collectors up first:
 #
-#   docker compose up -d                              # the 11 collectors
-#   docker compose -f docker-compose.blitz.yaml up -d  # the three streams
+#   docker compose up -d                              # the 25 collectors
+#   docker compose -f docker-compose.blitz.yaml up -d  # the generators
 #   docker compose -f docker-compose.blitz.yaml logs -f blitz-winsec
 #
 # `bdot-net` is declared external here on purpose: this stack attaches to
 # the collector topology's network, it never creates it.
 #
-# Send Palo Alto over syslog instead of OTLP (needs a syslog receiver on
-# the ingress collector, configured in Bindplane):
-#
-#   docker compose -f docker-compose.blitz.yaml --profile syslog up -d
-#   docker compose -f docker-compose.blitz.yaml stop blitz-palo-alto
+# Sending Palo Alto over syslog instead would need a syslog receiver on the
+# edge collectors, configured in Bindplane. NOTE: no service here declares a
+# `profiles:` key, so the --profile syslog invocation this comment used to
+# document does nothing -- it just starts every service.
 #
 # The blitz image is FROM scratch and ships ONLY the binary — no data
 # library — so the Palo Alto samples are bind-mounted from the blitz repo.
@@ -32,11 +33,12 @@
 #   CEF_RATE=1s           CEF_WORKERS=1
 #   APACHE_RATE=1s        APACHE_WORKERS=1
 #   APACHE_NATIVE_RATE=1s APACHE_NATIVE_WORKERS=1
-#   COLLECTOR_HOST=bdot-ingress               BLITZ_LOG_LEVEL=info
+#   EDGE_TARGET=bdot-edge-01                  BLITZ_LOG_LEVEL=info
+#   COLLECTOR_NETWORK=bdot-net
 
 # Own project name so this stack and the collector stack stay separate --
 # without it both default to the directory name and every blitz command warns
-# about the 11 collectors as "orphan containers".
+# about the 25 collectors as "orphan containers".
 name: grrcon-blitz
 
 x-blitz-common: &blitz-common
@@ -193,16 +195,26 @@ services:
       - ./logs/apache2:/var/log/apache2
 
   # ---------------------------------------------------------------------------
-  # Gateway-path duplicates.
+  # Edge-path duplicates.
   #
   # blitz allows ONE output per process, so a stream cannot be sent to both its
-  # edge collector and the ingress. These three are second instances of the same
-  # generators pointed at bdot-ingress, so the tcp sources on the gateway path
-  # receive data too.
+  # source-tier collector and the edge tier. These three are second instances of
+  # the same generators pointed at the edge tier, so the tcp sources on the
+  # grrcon-edge configuration receive data too.
   #
   # This deliberately DOUBLES those streams' volume at their backends: each event
-  # arrives once via the edge collector and once via ingress -> pool -> worker.
+  # arrives once via its source collector and once via edge -> pool -> worker.
   # The two file streams need no duplicate -- both collectors tail one file.
+  #
+  # TARGET: one NAMED collector, not the bdot-edge-pool alias. blitz holds ONE
+  # long-lived tcp connection, and Docker DNS pins that connection to a single
+  # container for its whole life -- so aiming at the alias scatters the three
+  # streams across three arbitrary collectors and each one only ever shows a
+  # single tcp source. Bindplane previews a configuration from ONE agent, so the
+  # other two sources look dead in the UI. Pinning all three to bdot-edge-01
+  # makes that one agent show all five sources live.
+  #
+  # Set EDGE_TARGET=bdot-edge-pool to get the scattered behaviour back.
   # ---------------------------------------------------------------------------
 
   blitz-winsec-gw:
@@ -210,7 +222,7 @@ services:
     container_name: blitz-winsec-gw
     environment:
       <<: *blitz-tcp-env
-      BLITZ_OUTPUT_TCP_HOST: bdot-edge-pool
+      BLITZ_OUTPUT_TCP_HOST: ${EDGE_TARGET:-bdot-edge-01}
       BLITZ_OUTPUT_TCP_PORT: "5142"
       BLITZ_GENERATOR_TYPE: filegen
       BLITZ_GENERATOR_FILEGEN_SOURCE: /samples/winsec.xml
@@ -224,7 +236,7 @@ services:
     container_name: blitz-palo-alto-gw
     environment:
       <<: *blitz-tcp-env
-      BLITZ_OUTPUT_TCP_HOST: bdot-edge-pool
+      BLITZ_OUTPUT_TCP_HOST: ${EDGE_TARGET:-bdot-edge-01}
       BLITZ_OUTPUT_TCP_PORT: "5141"
       BLITZ_GENERATOR_TYPE: filegen
       BLITZ_GENERATOR_FILEGEN_SOURCE: "package:palo-alto/csv"
@@ -239,7 +251,7 @@ services:
     container_name: blitz-json-gw
     environment:
       <<: *blitz-tcp-env
-      BLITZ_OUTPUT_TCP_HOST: bdot-edge-pool
+      BLITZ_OUTPUT_TCP_HOST: ${EDGE_TARGET:-bdot-edge-01}
       BLITZ_OUTPUT_TCP_PORT: "5143"
       BLITZ_GENERATOR_TYPE: json
       BLITZ_GENERATOR_JSON_TYPE: default

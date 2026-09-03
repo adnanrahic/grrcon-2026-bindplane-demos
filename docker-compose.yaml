@@ -1,17 +1,21 @@
 # GrrCON demo: a Bindplane-managed gateway topology.
 #
-#   your app / otel-cli -> localhost:4317 -> bdot-ingress -> bdot-pool:4317 -> one of bdot-01..10
+#   blitz (tcp 5141-5143 + tailed files) -> bdot-edge-01..10
+#                                        -> bdot-pool:4317 -> one of bdot-01..10
 #
-# All 11 collectors are managed from Bindplane Cloud over OpAMP; nothing here
+# All 25 collectors are managed from Bindplane Cloud over OpAMP; nothing here
 # defines a pipeline. Pipelines live in bindplane/ and are applied separately.
+# Three tiers: 10 edge (grrcon-edge), 10 gateway (grrcon-gateway), 5 per-source
+# (one grrcon-source-* fleet each, straight to a backend).
 #
 # The 10 workers share the network alias `bdot-pool`. Docker's embedded DNS
-# returns all 10 container IPs for that one name, so the ingress destination
+# returns all 10 container IPs for that one name, so the edge destination
 # points at a single hostname with gRPC load balancing on and the pool can grow
 # or shrink without touching the Bindplane config.
 #
-# Only bdot-ingress publishes ports. The workers listen on 4317 inside bdot-net
-# only -- one door in, ten collectors behind it.
+# Only the five source-tier collectors publish ports (5141-5143). The edge and
+# worker tiers listen inside bdot-net only. There is no host-published OTLP
+# entry point: the OTLP source was removed once nothing used it.
 
 x-bdot: &bdot
   image: ghcr.io/observiq/bindplane-agent:${BDOT_VERSION:-1.106.0}
@@ -393,7 +397,7 @@ services:
   # Edge collector: tails the native Apache access log that blitz writes to the
   # shared ./logs volume. Not a worker -- it carries no bdot-pool alias, and its
   # configuration ships straight to Elastic rather than through the pool, so the
-  # ingress/worker/router path is untouched by this addition.
+  # edge/worker/router path is untouched by this addition.
   bdot-apache:
     <<: *bdot
     container_name: bdot-apache
@@ -402,7 +406,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T11
       OPAMP_AGENT_NAME: bdot-apache
-      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-apache
+      OPAMP_LABELS: fleet=grrcon-source-apache,role=source,configuration=grrcon-apache
     volumes:
       - bdot-apache-storage:/etc/otel/storage
       - ./logs/apache2:/var/log/apache2:ro
@@ -417,7 +421,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T12
       OPAMP_AGENT_NAME: bdot-cef
-      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-cef
+      OPAMP_LABELS: fleet=grrcon-source-cef,role=source,configuration=grrcon-cef
     volumes:
       - bdot-cef-storage:/etc/otel/storage
       - ./logs/cef:/var/log/cef:ro
@@ -432,7 +436,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T13
       OPAMP_AGENT_NAME: bdot-panos
-      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-panos
+      OPAMP_LABELS: fleet=grrcon-source-panos,role=source,configuration=grrcon-panos
     ports:
       - "5141:5141"
     volumes:
@@ -448,7 +452,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T14
       OPAMP_AGENT_NAME: bdot-winsec
-      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-winsec
+      OPAMP_LABELS: fleet=grrcon-source-winsec,role=source,configuration=grrcon-winsec
     ports:
       - "5142:5142"
     volumes:
@@ -465,7 +469,7 @@ services:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T15
       OPAMP_AGENT_NAME: bdot-appjson
-      OPAMP_LABELS: fleet=grrcon-sources,role=source,configuration=grrcon-appjson
+      OPAMP_LABELS: fleet=grrcon-source-appjson,role=source,configuration=grrcon-appjson
     ports:
       - "5143:5143"
     volumes:
