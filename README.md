@@ -57,6 +57,33 @@ Every backend fails to export — stale tenants, placeholder tokens, a mocked
 service-account key. That is fine: Bindplane measures throughput at the
 pipeline, and the export errors are themselves the proof records arrived.
 
+## Demo quick start
+
+**Read [`docs/manual-demo-flows/RUNNING-THESE-DEMOS.md`](docs/manual-demo-flows/RUNNING-THESE-DEMOS.md)
+before presenting.** It has the 5-minute pre-flight, what looks broken but
+isn't, how to recover on stage, and what to clean up afterwards.
+
+A nightly job wipes the `grrcon-*` resources, so most mornings you start with:
+
+```bash
+bindplane get configurations | grep grrcon    # 7 -- if empty, rebuild:
+bindplane apply -f bindplane/
+bindplane rollout start grrcon-gateway        # then resume at the Prod gate
+bindplane rollout start grrcon-edge
+```
+
+Then run the flows in order — topology, build one by hand, get one for free,
+ship it safely:
+
+| # | Flow | Shows |
+|---|---|---|
+| 1 | [Advanced Pipeline Editor](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor.md) | Edge/gateway architecture and the routing connector |
+| 2 | [Pipeline Intelligence](docs/manual-demo-flows/manual-demo-pipeline-intelligence.md) | Building a pipeline by hand on the unparsed JSON stream |
+| 3 | [Full Pipeline Blueprints](docs/manual-demo-flows/manual-demo-full-pipeline-blueprints.md) | Not building one — parse, enrich and reduce, shipped |
+| 4 | [Progressive Rollouts and Rollbacks](docs/manual-demo-flows/manual-demo-progressive-rollouts-and-rollbacks.md) | Canary → prod staging, halting on error, rollback |
+
+Per-stream background is in [`docs/claude-generated/`](docs/claude-generated/).
+
 ## Layout
 
 | Path | Contents |
@@ -65,7 +92,8 @@ pipeline, and the export errors are themselves the proof records arrived.
 | `docker-compose.yaml` | The 30 collectors |
 | `docker-compose.blitz.yaml` | Telemetry generators |
 | `samples/` | Replay data, vendored so no blitz checkout is required |
-| `docs/` | Demo walkthroughs — one per stream |
+| `docs/manual-demo-flows/` | The demo scripts, plus the runbook for presenting them |
+| `docs/claude-generated/` | Per-stream background — one walkthrough per stream |
 | `.claude/` | Full reference, split by topic. Start at `.claude/00-index.md`. |
 
 ## Requirements
