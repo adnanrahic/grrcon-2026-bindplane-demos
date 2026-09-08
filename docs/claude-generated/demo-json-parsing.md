@@ -176,9 +176,8 @@ for k, v in sorted(c.items()): print('%-34s %d' % (k, v))
 "
 ```
 
-**Do not `grep` the backend name here** — on the gateway tier all five exporters
-share a collector, and a name grep under-reports Elastic and over-reports Splunk
-by an order of magnitude. See `.claude/50-routing.md` for why.
+**Use `--since 3m`, not 60s.** Elastic is bursty on the gateway tier and can read
+0 over a minute while healthy over three. See `.claude/50-routing.md`.
 
 ## Things that will not break, and one that will
 
