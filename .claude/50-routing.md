@@ -78,14 +78,16 @@ for k, v in sorted(c.items()): print('%-34s %d' % (k, v))
 "
 ```
 
-**Do not `grep` the backend name here.** On the source tier each collector has
-exactly one exporter, so counting lines that mention it works. On the gateway
-tier all five share a collector and the exporter identity lives in the
-`otelcol.component.id` field, so a name grep under-reports Elastic (its 404 is
-non-retryable, one line per batch) and wildly over-reports Splunk (DNS failure
-with `retry_on_failure` on, one line per attempt). Measured on the same 3m
-window: the grep gave `Elastic 0 / Splunk 797`; the real counts were
-`otlp_http/Elastic 235 / splunk_hec/Splunk-HEC__logs 1674`.
+**Use a 3m window, not 60s.** Grepping the backend name gives the *same* counts
+as the component-id parse — verified on one captured window: Elastic 244/244,
+Splunk 2359/2359, Dynatrace 135/135, googlecloud 37/37. What burned an
+investigation here was the window, not the method: Elastic is bursty on the
+gateway tier and read 0 over 60s while healthy at 244 over 3m.
+
+The component-id form is still preferred, for two reasons that are not about
+accuracy: it enumerates every exporter including ones you forgot to list (that
+is how `chronicle/Google-SecOps-Linux` shows up at all), and it cannot be fooled
+by a backend name appearing in unrelated text.
 
 The chronicle exporter still fails quietly — 7 lines in 3m against Splunk's
 1674 — so a low `chronicle/Google-SecOps-Linux` count is not evidence of a
