@@ -13,8 +13,11 @@ it safely:
 
 ## Before you present (5 min)
 
+**A nightly job wipes the `grrcon-*` resources**, so start here every morning:
+
 ```bash
-docker compose ps | grep -c bdot-          # 30
+bindplane get configurations | grep grrcon           # 7 -- if empty, see recovery
+docker compose ps | grep -c bdot-                    # 30
 bindplane get agents --selector role=source          # 5
 bindplane get agents --selector fleet=grrcon-edge    # 10
 bindplane get agents --selector fleet=grrcon-gateway # 10
@@ -51,8 +54,9 @@ quietly" below.
 
 ## If it's broken on stage
 
-**No `grrcon-*` configs, or pipeline collectors unbound.** The account has been
-wiped several times. Everything rebuilds from the repo:
+**No `grrcon-*` configs, or pipeline collectors unbound.** Expected — **a nightly
+job wipes them**, so the account is empty most mornings. Everything rebuilds from
+the repo:
 
 ```bash
 bindplane apply -f bindplane/
@@ -132,6 +136,12 @@ blueprint; if you run both, add it to `grrcon-gateway` in one and
 **Progressive Rollouts.** Two collectors carry `env=canary` (`bdot-01`,
 `bdot-02`); the other eight are `env=prod`. `maxErrors` is 0, so one erroring
 collector halts the rollout — which is the story, not a fault.
+
+The `History` rollback needs a *previous* version to roll back to, and the
+nightly wipe resets every config to `:1`. Check with
+`bindplane get configurations | grep grrcon`; if the config you plan to use is at
+`v1`, make a throwaway change and roll it out first so there is history to
+show.
 
 ## After you present
 

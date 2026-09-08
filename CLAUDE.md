@@ -70,8 +70,10 @@ a mocked service-account key. Export errors are the *evidence records arrived* �
 count them per exporter to prove a route works. Google SecOps is the exception:
 it fails quietly, so a low error count there is not success.
 
-**The account has been wiped several times.** Everything is rebuildable from
-`bindplane/` — apply, then roll out. See `.claude/80-maintenance.md`.
+**A nightly job wipes the `grrcon-*` resources.** Assume the account is empty
+every morning: check before doing anything, and expect to `bindplane apply -f
+bindplane/` plus roll out. Fleets and the router connector survive; sources,
+destinations and configurations do not. See `.claude/80-maintenance.md`.
 
 **A paused progressive rollout is not a failure.** `grrcon-gateway` stages
 Canary → Prod and reports `Paused … errors=0` between them.

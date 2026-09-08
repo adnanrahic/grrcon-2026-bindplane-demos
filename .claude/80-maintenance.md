@@ -16,12 +16,22 @@ metadata:
     platform: linux
 ```
 
-## Rebuilding after the account loses the resources
+## Rebuilding after the nightly wipe
 
-If the `grrcon-*` configurations are deleted from Bindplane, the collectors keep
-running but lose their pipelines -- the edge collectors stop listening on
-5141-5143 and the generators fail with `connection refused`. Symptoms look like a
-broken generator; the cause is an empty configuration.
+**A nightly job deletes the `grrcon-*` resources.** Observed empty on the
+mornings of 2026-09-07 and 2026-09-08; resources applied during the day survive
+until the next night. Assume you are rebuilding every morning.
+
+It is selective, which is the quickest way to recognise it:
+
+| Deleted | Survives |
+|---|---|
+| Sources, Destinations, Configurations | Fleets, the `grrcon-router` Connector |
+| | All 30 collectors, still registered |
+
+The collectors keep running but lose their pipelines -- the edge collectors stop
+listening on 5141-5143 and the generators fail with `connection refused`.
+Symptoms look like a broken generator; the cause is an empty configuration.
 
 Rebuild from source and roll out:
 
@@ -32,7 +42,13 @@ bindplane rollout start grrcon-edge
 ```
 
 Content comes back identical because `bindplane/*.yaml` is the source of truth.
-Version history does not -- configurations restart at `:1`.
+**Version history does not** -- configurations restart at `:1`. That breaks the
+rollback half of the Progressive Rollout demo, which needs a previous version to
+roll back to, so make a throwaway change and roll it out before presenting that
+one.
+
+Collectors may stay at `CONFIGURATION: -` after the apply; the label toggle in
+`.claude/70-operations.md` forces the binding.
 
 ## Relabeling a collector that has already registered
 
