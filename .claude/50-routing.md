@@ -58,18 +58,30 @@ Diagnosing one: check unmatched throughput in the UI first, then per-exporter
 output on the gateway tier — one column drops to zero while the others hold:
 
 ```bash
-for d in Elastic Splunk Dynatrace googlecloud; do
-  n=0
-  for i in $(seq -w 1 10); do
-    n=$((n + $(docker logs --since 60s bdot-$i 2>&1 | grep -ci "$d")))
-  done
-  printf '%-12s %s\n' "$d" "$n"
-done
+for i in $(seq -w 1 10); do docker logs --since 3m bdot-$i 2>&1; done | python3 -c "
+import sys, json, collections
+c = collections.Counter()
+for line in sys.stdin:
+    try: d = json.loads(line)
+    except ValueError: continue
+    if d.get('otelcol.component.kind') == 'exporter':
+        c[d['otelcol.component.id']] += 1
+for k, v in sorted(c.items()): print('%-34s %d' % (k, v))
+"
 ```
 
-`SecOps` is excluded on purpose: the chronicle exporter mostly fails quietly — 4
-log lines in 5 minutes against Splunk's 423 in 60 seconds — so a short-window
-zero means nothing. Use UI throughput for the winsec branch.
+**Do not `grep` the backend name here.** On the source tier each collector has
+exactly one exporter, so counting lines that mention it works. On the gateway
+tier all five share a collector and the exporter identity lives in the
+`otelcol.component.id` field, so a name grep under-reports Elastic (its 404 is
+non-retryable, one line per batch) and wildly over-reports Splunk (DNS failure
+with `retry_on_failure` on, one line per attempt). Measured on the same 3m
+window: the grep gave `Elastic 0 / Splunk 797`; the real counts were
+`otlp_http/Elastic 235 / splunk_hec/Splunk-HEC__logs 1674`.
+
+The chronicle exporter still fails quietly — 7 lines in 3m against Splunk's
+1674 — so a low `chronicle/Google-SecOps-Linux` count is not evidence of a
+problem. Use UI throughput for the winsec branch.
 
 To read the records, wire a temporary debug destination to `unmatched`; see
 `docs/demo-json-parsing.md`. It is deliberately not committed.

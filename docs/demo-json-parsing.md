@@ -84,13 +84,13 @@ docker logs --since 30s bdot-appjson | grep -A20 'LogRecord #'
 
 Three gotchas that waste stage time:
 
-- **Destination before configuration.** A config picks up the destination
-  *version it was applied against*, so the other order leaves a dangling
-  reference or stale verbosity and no records.
+- **Destination before configuration.** A config pins the destination *version
+  it was applied against*, so the other order leaves a dangling reference or
+  stale verbosity and no records.
 - **`verbosity: basic` prints a count, not a record.** Seeing only
   `"msg":"Logs" ... "log records": 9` means verbosity did not take effect.
-- **Revert after.** `git checkout bindplane/20-source-appjson.yaml`, re-apply,
-  roll out, then `bindplane delete destination grrcon-debug-out`.
+- **Revert after:** `git checkout bindplane/20-source-appjson.yaml`, re-apply,
+  roll out, `bindplane delete destination grrcon-debug-out`.
 
 ## The flow
 
@@ -101,10 +101,8 @@ Processor: **Parse JSON** (`parse_json`) on `grrcon-appjson-in`, with
 body. The body becomes a map, every key its own field.
 
 A shipped **`parse-json-bundle`** blueprint does the same thing; the raw processor
-shows what it is doing.
-
-**The reveal:** fields appear, and the timestamp is *still* 1970 with severity
-*still* unset. Pause here — "parsed" is not "usable".
+shows what it is doing. **The reveal:** fields appear, timestamp is *still* 1970 and severity *still*
+unset. Pause here — "parsed" is not "usable".
 
 ### Step 2 — promote the real timestamp
 
@@ -112,8 +110,8 @@ Processor: **Parse Timestamp** (`parse_timestamp_v2`) — `log_field_type: Body`
 `log_source_field: timestamp`, format RFC3339 (the generator emits
 `2026-09-03T11:26:51.27845118Z`).
 
-Result: `Timestamp` becomes the event's own time. Show a time-ordered view before
-and after — 1970 timestamps break retention, ordering and time-windowed queries.
+`Timestamp` becomes the event's own time. Show a time-ordered view before and
+after — 1970 breaks retention, ordering and time-windowed queries.
 
 > The `tcp` source can do this itself (`parse_timestamp: true`,
 > `timestamp_field: timestamp`). Doing it as a processor separates the three fixes
@@ -125,21 +123,19 @@ Processor: **Parse Severity Fields** (`parse_severity_v2`) — `match: Body`,
 `body_severity_field: level`. `level: FATAL` becomes `SeverityNumber: Fatal`, and
 severity filtering works.
 
-**Contrast:** the CEF stream got this free — its plugin runs a
-`severity_parser`, so `severity=1` arrived as `SeverityNumber: Info(9)`. The
-native source did in one step what took three here, which is the honest argument
-for native sources and lands better right after doing it by hand.
+**Contrast:** the CEF stream got this free — its plugin runs a `severity_parser`,
+so `severity=1` arrived as `SeverityNumber: Info(9)`. The native source did in
+one step what took three here — the honest argument for native sources, landing
+better right after doing it by hand.
 
 ### Step 4 (optional) — now that it is structured, reduce it
 
 With fields and severity in place, reduction becomes available:
 
-- **Filter by Severity** (`filter_severity`) — drop below WARN
-- **Deduplicate Logs** (`log_dedup_v2`) — collapse repeated bursts
-- **Filter by Condition** (`filter-by-condition`) — drop by `component`/`host`
-
-The ingest-cost story, possible only *after* steps 1–3: before parsing, the
-pipeline cannot tell a FATAL from a health check.
+**Filter by Severity** drops below WARN, **Deduplicate Logs** collapses bursts,
+**Filter by Condition** drops by `component`/`host`. The ingest-cost story, and
+possible only *after* steps 1–3 — before parsing, the pipeline cannot tell a
+FATAL from a health check.
 
 ## Suggested narrative arc
 
@@ -155,7 +151,7 @@ pipeline cannot tell a FATAL from a health check.
 
 ## Resetting between runs
 
-Stateless — reverting the config is the whole reset:
+Stateless — reverting the config is the reset:
 
 ```bash
 git checkout bindplane/20-source-appjson.yaml bindplane/40-gateway.yaml
@@ -164,20 +160,25 @@ bindplane rollout start grrcon-appjson
 bindplane rollout start grrcon-gateway
 ```
 
-Check the starting state. These four should all be non-zero — this replaces the
-old "catch-all must be 0" check, since the catch-all now exports to `nop` and
-emits no log lines either way (it is still throughput-measured in the UI). SecOps
-is excluded because the chronicle exporter fails quietly:
+Check the starting state — every gateway exporter should be non-zero, replacing
+the old "catch-all must be 0" check:
 
 ```bash
-for d in Elastic Splunk Dynatrace googlecloud; do
-  n=0
-  for i in $(seq -w 1 10); do
-    n=$((n + $(docker logs --since 3m bdot-$i 2>&1 | grep -ci "$d")))
-  done
-  printf '%-12s %s\n' "$d" "$n"
-done
+for i in $(seq -w 1 10); do docker logs --since 3m bdot-$i 2>&1; done | python3 -c "
+import sys, json, collections
+c = collections.Counter()
+for line in sys.stdin:
+    try: d = json.loads(line)
+    except ValueError: continue
+    if d.get('otelcol.component.kind') == 'exporter':
+        c[d['otelcol.component.id']] += 1
+for k, v in sorted(c.items()): print('%-34s %d' % (k, v))
+"
 ```
+
+**Do not `grep` the backend name here** — on the gateway tier all five exporters
+share a collector, and a name grep under-reports Elastic and over-reports Splunk
+by an order of magnitude. See `.claude/50-routing.md` for why.
 
 ## Things that will not break, and one that will
 
@@ -186,8 +187,7 @@ done
   here and the router still routes correctly. Verified: every gateway exporter
   kept receiving across the switch from `parse_format: json` to `none`.
 - **Turning native parsing back on is one line.** `parse_format: json` on
-  `grrcon-appjson-in` restores the built-in `json_parser` and skips step 1 —
-  useful if the demo runs long.
+  `grrcon-appjson-in` restores the `json_parser` and skips step 1.
 - **The gateway rollout pauses between stages and looks like a failure.**
   Progressive rollout (Canary `env=canary` → Prod `env=prod`) reports
   `Paused STAGE=Prod completed=2 errors=0 waiting=8` mid-flight. `errors=0` is
@@ -195,6 +195,5 @@ done
 
 ## Reference
 
-Stream `bindplane/20-source-appjson.yaml`; generator `blitz-json`. No debug
-destination is committed — see "Showing the starting state" for a temporary one.
-Field list and generator internals: `.claude/60-blitz-data.md`.
+Stream `bindplane/20-source-appjson.yaml`; generator `blitz-json`; field list
+`.claude/60-blitz-data.md`. No debug destination is committed.
