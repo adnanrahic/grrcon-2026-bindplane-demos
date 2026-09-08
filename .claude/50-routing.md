@@ -153,3 +153,7 @@ source data. If the PAN or Apache blueprints need bare payloads, either add a
 second transform that strips the embedded prefix per appname, or write clean
 samples into `samples/` the way `winsec.xml` works.
 
+---
+
+Working rules, verification discipline and the silent failure modes:
+[`../CLAUDE.md`](../CLAUDE.md).

@@ -7,8 +7,9 @@ account** — treat every apply as production.
 ## Where things are
 
 - `README.md` — overview, quick start, layout
-- `.claude/00-index.md` — **start here** for anything detailed; the reference is
-  split by topic across `.claude/10-` … `80-`
+- [`.claude/00-index.md`](.claude/00-index.md) — **the detail behind this file**;
+  the reference is split by topic across `.claude/10-` … `80-`, and every topic
+  file links back here
 - `docs/` — one demo walkthrough per stream
 - `bindplane/` — the resources; applied in **filename order**
 - `samples/`, `docker-compose*.yaml`, `logs/` (gitignored)

@@ -147,3 +147,7 @@ bindplane copy configuration grrcon-edge grrcon-v2-probe
 bindplane delete configuration grrcon-v2-probe --force
 ```
 
+---
+
+Working rules, verification discipline and the silent failure modes:
+[`../CLAUDE.md`](../CLAUDE.md).

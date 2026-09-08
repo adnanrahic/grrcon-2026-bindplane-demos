@@ -3,6 +3,12 @@
 The original long README, split into topic files. Every markdown file in this
 repo is capped at 200 lines.
 
+**Start at [`../CLAUDE.md`](../CLAUDE.md)** if you are about to change something.
+It is the short version: the rules that are load-bearing (apply before compose
+up, rollout after apply, filename order in `bindplane/`), the verification
+discipline this repo needs, and the silent failure modes. The files below are the
+detail behind it.
+
 | File | Covers |
 |---|---|
 | `10-architecture.md` | Topology, tiers, fleets, why it is shaped this way |

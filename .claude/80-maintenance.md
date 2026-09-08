@@ -114,3 +114,8 @@ work differed, which is the argument none of them makes alone.
 | `bindplane/30-edge.yaml` | `grrcon-edge` -- the five native sources -> gateway pool |
 | `bindplane/10-connector-router.yaml` | routing connector -- splits the pooled stream by `log_type`. numbered `10-` so it applies first: a connector must exist before the config referencing it |
 | `bindplane/40-gateway.yaml` | `grrcon-gateway` -- gateway source -> router -> five destinations, progressive rollout |
+
+---
+
+Working rules, verification discipline and the silent failure modes:
+[`../CLAUDE.md`](../CLAUDE.md).

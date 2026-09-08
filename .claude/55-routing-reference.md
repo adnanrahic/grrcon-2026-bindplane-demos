@@ -81,3 +81,7 @@ Hence the numeric prefixes:
 already present a wrong order silently works, so this stayed hidden until the
 account was wiped and everything was recreated from scratch.
 
+---
+
+Working rules, verification discipline and the silent failure modes:
+[`../CLAUDE.md`](../CLAUDE.md).

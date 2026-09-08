@@ -146,3 +146,7 @@ the Bindplane account, referenced by name rather than redefined so they keep
 their real credentials. `bindplane apply` against a **fresh** account needs those
 three created first. `Splunk-HEC` is defined in `bindplane/40-gateway.yaml`.
 
+---
+
+Working rules, verification discipline and the silent failure modes:
+[`../CLAUDE.md`](../CLAUDE.md).

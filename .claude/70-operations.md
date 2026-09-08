@@ -151,3 +151,7 @@ bindplane label agent --selector fleet=grrcon-gateway configuration=grrcon-gatew
 
 Applying the configurations before `docker compose up -d` avoids this entirely.
 
+---
+
+Working rules, verification discipline and the silent failure modes:
+[`../CLAUDE.md`](../CLAUDE.md).

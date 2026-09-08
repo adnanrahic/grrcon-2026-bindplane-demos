@@ -190,3 +190,7 @@ EDGE_TARGET=bdot-edge-01                  COLLECTOR_NETWORK=bdot-net
 to `bdot-edge-pool` to scatter them across the tier instead. The TCP ports are
 hardcoded in compose, not tunable.
 
+---
+
+Working rules, verification discipline and the silent failure modes:
+[`../CLAUDE.md`](../CLAUDE.md).

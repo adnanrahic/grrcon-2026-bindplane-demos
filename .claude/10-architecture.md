@@ -100,3 +100,7 @@ Without pinning, every teardown mints new agents and orphans the old ones.
 advanced routing: explicit source-to-destination connections instead of an
 implicit fan-out. See "Configuration v2" below.
 
+---
+
+Working rules, verification discipline and the silent failure modes:
+[`../CLAUDE.md`](../CLAUDE.md).

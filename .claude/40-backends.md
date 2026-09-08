@@ -158,3 +158,7 @@ PAN-OS types, with toggleable volume-reduction filters),
 type with no parameters, so a bundle is instantiated through the Bindplane UI
 and then captured back with `bindplane get processors --export`.
 
+---
+
+Working rules, verification discipline and the silent failure modes:
+[`../CLAUDE.md`](../CLAUDE.md).
