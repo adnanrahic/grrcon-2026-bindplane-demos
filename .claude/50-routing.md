@@ -36,11 +36,17 @@ Routes are **first match wins**. The connector still declares an unconditioned
 `unmatched` route last, but `grrcon-gateway` no longer wires it to a
 destination -- so anything not matching the five conditions is dropped.
 
-### Detecting a misroute without the catch-all sink
+### Detecting a misroute
 
-Leaving `unmatched` unwired does not create a dangling route — Bindplane
-synthesises a terminal pipeline and **keeps a `throughputmeasurement` processor**
-on it:
+**There is no catch-all.** `grrcon-router` declares five conditioned routes and
+nothing else, so a record matching none of them is dropped by the connector with
+nothing to observe it.
+
+That was a two-step loss, worth knowing because the intermediate state is
+misleading. When the `unmatched` route still existed but `grrcon-gateway` did not
+wire it anywhere, Bindplane synthesised a terminal branch and **kept a
+`throughputmeasurement` processor** on it, so the catch-all stayed measurable in
+the UI even though `nop` printed no records:
 
 ```yaml
 logs/c-c-grrcon-router__unmatched:
@@ -50,12 +56,14 @@ logs/d-no_routes__c-c-grrcon-router__unmatched:
     exporters:  [nop/c-c-grrcon-router]
 ```
 
-So the catch-all is **still measured** — a misroute still shows as non-zero
-throughput on the unmatched branch in the UI. Only the ability to read the
-offending *records* is gone, since `nop` prints nothing.
+Removing the route itself removed that branch too — a gateway collector's
+rendered config now has zero `unmatched` and zero `nop/` references. So misroute
+throughput is no longer readable anywhere; **per-exporter counts are the only
+signal**. Re-add `- id: unmatched` as the last route in
+`bindplane/10-connector-router.yaml` to get the measurable branch back.
 
-Diagnosing one: check unmatched throughput in the UI first, then per-exporter
-output on the gateway tier — one column drops to zero while the others hold:
+Diagnosing one: per-exporter output on the gateway tier — one column drops to
+zero while the others hold:
 
 ```bash
 for i in $(seq -w 1 10); do docker logs --since 3m bdot-$i 2>&1; done | python3 -c "
@@ -99,11 +107,9 @@ that sources put it in different places:
 
 `apache_common` regex-parses into the body, so its `log_type` ends up a body
 field and the only attribute on the record is `log.file.name`. Getting this
-wrong matches nothing **silently** and dumps the stream into the catch-all,
-which is now unwired — so the records are discarded, though the branch is still
-throughput-measured. See [Detecting a misroute without the catch-all
-sink](#detecting-a-misroute-without-the-catch-all-sink), then check which side of
-the record its `log_type` is on.
+wrong matches nothing **silently**, and with no catch-all those records are
+dropped unobserved. See [Detecting a misroute](#detecting-a-misroute), then check
+which side of the record its `log_type` is on.
 
 ### Record shape: raw body, metadata in attributes
 

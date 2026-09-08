@@ -80,8 +80,9 @@ Canary → Prod and reports `Paused … errors=0` between them.
 
 **`log_type` is not in the same place for every stream.** Apache parses into the
 body, so its router condition is `body["log_type"]`; everything else uses
-`attributes["log_type"]`. A mismatch matches nothing silently and sends the
-stream to the catch-all. See `.claude/50-routing.md`.
+`attributes["log_type"]`. A mismatch matches nothing silently and — with the
+router's catch-all removed — the stream is dropped unobserved. See
+`.claude/50-routing.md`.
 
 **Files blitz writes are `0600`**, and collectors run as `uid=10005(otel)`. A
 root-owned file is unreadable and the source tails nothing *without an error*.

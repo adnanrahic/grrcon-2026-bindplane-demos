@@ -47,13 +47,12 @@ not promise the room that data lands anywhere.
   **`rpc error: code = Unauthenticated`**, because `credentials.json` is a mock.
   The pipeline still runs.
 
-`grrcon-debug-out` has been **removed** from `grrcon-gateway`, and with it the
-`unmatched` catch-all wiring. The router's five conditioned routes remain; the
-`unmatched` route id is still declared in `10-connector-router.yaml` but nothing
-is wired to it, so unmatched logs are discarded via a synthesised `nop`
-pipeline -- still throughput-measured, just no longer readable. See `.claude/70-operations.md` for
-how to confirm flow, and [Detecting a misroute without the catch-all
-sink](#detecting-a-misroute-without-the-catch-all-sink) for the detail.
+`grrcon-debug-out` has been **removed** from `grrcon-gateway`, and the
+`unmatched` catch-all route has been removed from `grrcon-router` entirely. Only
+the five conditioned routes remain, so an unmatched record is dropped by the
+connector with nothing to observe it. See `.claude/70-operations.md` for how to
+confirm flow, and "Detecting a misroute" in `.claude/50-routing.md` for what
+that costs.
 
 ### Why `Google-SecOps-Linux`, not `Google-SecOps`
 
