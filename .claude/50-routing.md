@@ -94,7 +94,7 @@ The chronicle exporter still fails quietly — 7 lines in 3m against Splunk's
 problem. Use UI throughput for the winsec branch.
 
 To read the records, wire a temporary debug destination to `unmatched`; see
-`docs/demo-json-parsing.md`. It is deliberately not committed.
+`docs/claude-generated/demo-json-parsing.md`. It is deliberately not committed.
 
 ### Every source stamps `log_type` — but not all in the same place
 

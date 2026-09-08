@@ -92,7 +92,7 @@ root-owned file is unreadable and the source tails nothing *without an error*.
 - **Verify against the live system before reporting success.** "Applied cleanly"
   is not "rolled out", and "rolled out" is not "carrying data".
 - **Fix the data, not the parser,** when a native source will not parse. That has
-  been the right answer every time so far — see `docs/demo-native-sources.md`.
+  been the right answer every time so far — see `docs/claude-generated/demo-native-sources.md`.
 - **Leave the user's uncommitted work alone.** Stage specific paths rather than
   `git add -A` when the tree has edits you did not make.
 - **Say when something is unverified.** Several conclusions in this repo were

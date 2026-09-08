@@ -75,18 +75,18 @@ docker compose down -v                             # agents reconnect with same 
 
 ## Demo walkthroughs
 
-- [`docs/demo-json-parsing.md`](docs/demo-json-parsing.md) — building JSON
+- [`docs/claude-generated/demo-json-parsing.md`](docs/claude-generated/demo-json-parsing.md) — building JSON
   parsing, timestamp promotion and severity mapping by hand on the `appjson`
   stream, the one pipeline no native source or blueprint covers.
-- [`docs/demo-palo-alto-blueprint.md`](docs/demo-palo-alto-blueprint.md) — the
+- [`docs/claude-generated/demo-palo-alto-blueprint.md`](docs/claude-generated/demo-palo-alto-blueprint.md) — the
   mirror image: a shipped full-pipeline blueprint that parses 13 PAN-OS log
   types, adds MITRE ATT&CK context and exposes volume-reduction toggles.
 
-- [`docs/demo-native-sources.md`](docs/demo-native-sources.md) — the `apache`
+- [`docs/claude-generated/demo-native-sources.md`](docs/claude-generated/demo-native-sources.md) — the `apache`
   and `cef` streams, where the source type parses on ingest and you write no
   processors at all, plus the silent failure mode when the data does not match
   what the parser expects.
-- [`docs/demo-winsec-secops.md`](docs/demo-winsec-secops.md) — Windows Events to
+- [`docs/claude-generated/demo-winsec-secops.md`](docs/claude-generated/demo-winsec-secops.md) — Windows Events to
   Google SecOps, where a native source exists but the `windowseventlog` receiver
   needs a Windows host, so the XML is parsed and standardized downstream instead.
 
