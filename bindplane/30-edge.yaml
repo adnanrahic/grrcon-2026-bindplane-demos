@@ -34,6 +34,25 @@ spec:
     value: round_robin
   - name: retry_on_failure_enabled
     value: true
+  # The edge tier was dropping data into the pool: 1797 "sending queue is full"
+  # plus 167 "Dropping data" in a 3m window, which silently starved the winsec
+  # branch on the gateway -- its chronicle exporter showed zero export attempts
+  # while the source tier showed 178 in the same window.
+  #
+  # Raised 4x from the 5000 default. The queue is PERSISTENT (file_storage on the
+  # collector's volume) and max_log_size is 1MiB, so queue_size is a disk ceiling
+  # and not just memory -- 20000 is a deliberate compromise, not the largest
+  # number that fits.
+  #
+  # This buys headroom; it does not add throughput. If the pool genuinely cannot
+  # keep up, the queue just takes longer to fill. The underlying cause is ten edge
+  # collectors each tailing the same two files.
+  - name: sending_queue_enabled
+    value: true
+  - name: sending_queue_num_consumers
+    value: 20
+  - name: sending_queue_queue_size
+    value: 20000
 ---
 apiVersion: bindplane.observiq.com/v2
 kind: Configuration

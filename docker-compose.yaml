@@ -526,6 +526,7 @@ services:
       OPAMP_LABELS: role=source-unbound
     volumes:
       - bdot-apache-unbound-storage:/etc/otel/storage
+      - ./logs/apache2:/var/log/apache2:ro
     networks:
       - bdot-net
 
@@ -540,6 +541,7 @@ services:
       OPAMP_LABELS: role=source-unbound
     volumes:
       - bdot-cef-unbound-storage:/etc/otel/storage
+      - ./logs/cef:/var/log/cef:ro
     networks:
       - bdot-net
 
@@ -547,6 +549,8 @@ services:
     <<: *bdot
     container_name: bdot-panos-unbound
     hostname: bdot-panos-unbound
+    ports:
+      - "5241:5141"   # host 5241 -> container 5141; only listens once bound
     environment:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T23
@@ -561,6 +565,8 @@ services:
     <<: *bdot
     container_name: bdot-winsec-unbound
     hostname: bdot-winsec-unbound
+    ports:
+      - "5242:5142"   # host 5242 -> container 5142; only listens once bound
     environment:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T24
@@ -575,6 +581,8 @@ services:
     <<: *bdot
     container_name: bdot-appjson-unbound
     hostname: bdot-appjson-unbound
+    ports:
+      - "5243:5143"   # host 5243 -> container 5143; only listens once bound
     environment:
       <<: *bdot-env
       OPAMP_AGENT_ID: 01K5GRRC0N0000000000BD0T25
