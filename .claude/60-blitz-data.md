@@ -12,7 +12,7 @@ with a native file-based source write files instead. See "Native formats" for wh
 | Service | Transport | Target | Generator | Source | Rate | Workers |
 |---|---|---|---|---|---|---|
 | `blitz-winsec` | tcp | `bdot-winsec:5142` | `filegen` | `./samples/winsec.xml` | 500ms | 2 |
-| `blitz-palo-alto` | tcp | `bdot-panos:5141` | `filegen` | `package:palo-alto/csv` | 500ms | 2 |
+| `blitz-palo-alto` | tcp | `bdot-panos:5141` | `filegen` | `./samples/palo-alto.log` | 500ms | 2 |
 | `blitz-json` | tcp | `bdot-appjson:5143` | `json` | `default`, synthesized | 1s | 1 |
 | `blitz-cef` | file | `/var/log/cef/events.log` | `filegen` | `./samples/cef.log` | 1s | 1 |
 | `blitz-apache-native` | file | `/var/log/apache2/access.log` | `apache-common` | generated | 1s | 1 |
@@ -46,7 +46,8 @@ Rate note: the compose file defaults to `150ms`, but `.env` sets
 ### 2. Palo Alto -- `blitz-palo-alto`
 
 Native PAN-OS CSV, the format the Palo Alto blueprint parses. The
-`palo-alto/csv` package holds 15 lines across 13 log types:
+`samples/palo-alto.log` holds 15 lines across 13 log types, copied verbatim
+from the upstream `palo-alto/csv` package:
 
 `authentication`, `config`, `correlation`, `decryption`, `globalprotect` (2),
 `gtp`, `hipmatch`, `iptag`, `sctp`, `system` (2), `threat`, `traffic`, `userid`
@@ -159,25 +160,26 @@ NGINX (`access.log`, 5 lines, plus `upstream_error.log` and `leef_status.log`),
 or point it at a file under `./samples` for a hand-tuned Common Log Format mix
 with no sshd contamination.
 
-### Data library dependency
+### No data library dependency
 
 `package:` sources are not in the blitz image -- it is `FROM scratch` and ships
-only the binary. Compose bind-mounts them from a blitz clone:
+only the binary, so they used to be bind-mounted from a blitz clone at
+`${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library`.
 
-```
-${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library
-```
+**Nothing uses `package:` any more.** Every replayed sample is vendored into
+`./samples`, so the stack runs with no blitz checkout present -- verified by
+renaming the clone away and restarting the generators.
 
-Set `BLITZ_REPO` in `.env` if your clone is not a sibling of this directory.
-`blitz-winsec` is the exception -- it reads `./samples`, so it works without the
-clone.
+The Palo Alto lines were the last holdout; `samples/vendor-palo-alto.sh`
+refreshes them from upstream and is the only thing that still wants a clone
+(honours `BLITZ_REPO`).
 
 ### Tunables
 
 All optional, override in `.env`:
 
 ```
-BLITZ_REPO=../blitz    BLITZ_VERSION=latest    BLITZ_LOG_LEVEL=info
+BLITZ_VERSION=latest   BLITZ_LOG_LEVEL=info
 WINSEC_RATE=500ms      WINSEC_WORKERS=2
 PAN_RATE=500ms         PAN_WORKERS=2
 JSON_RATE=1s           JSON_WORKERS=1

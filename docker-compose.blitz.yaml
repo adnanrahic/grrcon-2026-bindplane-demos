@@ -23,12 +23,14 @@
 # `profiles:` key, so the --profile syslog invocation this comment used to
 # document does nothing -- it just starts every service.
 #
-# The blitz image is FROM scratch and ships ONLY the binary — no data
-# library — so the Palo Alto samples are bind-mounted from the blitz repo.
-# Set BLITZ_REPO if that clone is not a sibling of this directory.
+# The blitz image is FROM scratch and ships ONLY the binary — no data library.
+# Every sample this stack replays is therefore vendored into ./samples and
+# mounted from there, so the stack has NO dependency on a blitz clone. The Palo
+# Alto lines were copied verbatim from the upstream palo-alto/csv package
+# (15 lines, 13 log types) -- see samples/vendor-palo-alto.sh to refresh them.
 #
 # Tunables (all optional, override in .env or the environment):
-#   BLITZ_REPO=../blitz   WINSEC_RATE=150ms   WINSEC_WORKERS=2
+#   WINSEC_RATE=150ms     WINSEC_WORKERS=2
 #   PAN_RATE=500ms        PAN_WORKERS=2       JSON_RATE=1s   JSON_WORKERS=1
 #   CEF_RATE=1s           CEF_WORKERS=1
 #   APACHE_RATE=1s        APACHE_WORKERS=1
@@ -103,12 +105,11 @@ services:
       BLITZ_OUTPUT_TCP_PORT: "5141"
       BLITZ_OUTPUT_TCP_WORKERS: "1"
       BLITZ_GENERATOR_TYPE: filegen
-      BLITZ_GENERATOR_FILEGEN_SOURCE: "package:palo-alto/csv"
+      BLITZ_GENERATOR_FILEGEN_SOURCE: /samples/palo-alto.log
       BLITZ_GENERATOR_FILEGEN_WORKERS: ${PAN_WORKERS:-2}
       BLITZ_GENERATOR_FILEGEN_RATE: ${PAN_RATE:-500ms}
-      BLITZ_DATA_LIBRARY_DIR: /data_library
     volumes:
-      - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
+      - ./samples:/samples:ro
 
   # 3. Mixed-format app log — a JSON envelope wrapping an unstructured
   #    key=value message body. No blueprint covers this shape, so
@@ -239,12 +240,11 @@ services:
       BLITZ_OUTPUT_TCP_HOST: ${EDGE_TARGET:-bdot-edge-01}
       BLITZ_OUTPUT_TCP_PORT: "5141"
       BLITZ_GENERATOR_TYPE: filegen
-      BLITZ_GENERATOR_FILEGEN_SOURCE: "package:palo-alto/csv"
+      BLITZ_GENERATOR_FILEGEN_SOURCE: /samples/palo-alto.log
       BLITZ_GENERATOR_FILEGEN_WORKERS: ${PAN_WORKERS:-2}
       BLITZ_GENERATOR_FILEGEN_RATE: ${PAN_RATE:-500ms}
-      BLITZ_DATA_LIBRARY_DIR: /data_library
     volumes:
-      - ${BLITZ_REPO:-../blitz}/generator/filegen/embeddedlibrary/data_library:/data_library:ro
+      - ./samples:/samples:ro
 
   blitz-json-gw:
     <<: *blitz-common

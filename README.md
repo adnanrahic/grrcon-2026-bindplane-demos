@@ -64,12 +64,15 @@ pipeline, and the export errors are themselves the proof records arrived.
 | `bindplane/` | Sources, destinations, connector, configurations, fleets. Applied in filename order. |
 | `docker-compose.yaml` | The 30 collectors |
 | `docker-compose.blitz.yaml` | Telemetry generators |
-| `samples/` | Replay data |
+| `samples/` | Replay data, vendored so no blitz checkout is required |
 | `docs/` | Demo walkthroughs — one per stream |
 | `.claude/` | Full reference, split by topic. Start at `.claude/00-index.md`. |
 
 ## Requirements
 
-Docker, a Bindplane Cloud account, the `bindplane` CLI, and a
-[blitz](https://github.com/observIQ/blitz) clone as a sibling directory for
-`package:` generator data (override with `BLITZ_REPO`).
+Docker, a Bindplane Cloud account, and the `bindplane` CLI.
+
+No [blitz](https://github.com/observIQ/blitz) checkout is needed — every sample
+the generators replay is vendored into `samples/`. Refreshing the Palo Alto
+lines from upstream is the one task that wants a clone, via
+`samples/vendor-palo-alto.sh` (honours `BLITZ_REPO`).
