@@ -77,7 +77,7 @@ ship it safely:
 
 | # | Flow | Shows |
 |---|---|---|
-| 1 | [Advanced Pipeline Editor](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor.md) | Edge/gateway architecture and the routing connector |
+| 1 | [Advanced Pipeline Editor](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor.md) · [illustrated](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor-illustrated.md) | Edge/gateway architecture and the routing connector |
 | 2 | [Pipeline Intelligence](docs/manual-demo-flows/manual-demo-pipeline-intelligence.md) | Building a pipeline by hand on the unparsed JSON stream |
 | 3 | [Full Pipeline Blueprints](docs/manual-demo-flows/manual-demo-full-pipeline-blueprints.md) | Not building one — parse, enrich and reduce, shipped |
 | 4 | [Progressive Rollouts and Rollbacks](docs/manual-demo-flows/manual-demo-progressive-rollouts-and-rollbacks.md) | Canary → prod staging, halting on error, rollback |
