@@ -80,7 +80,7 @@ ship it safely:
 | 1 | [Advanced Pipeline Editor](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor.md) · [illustrated](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor-illustrated.md) | Edge/gateway architecture and the routing connector |
 | 2 | [Pipeline Intelligence](docs/manual-demo-flows/manual-demo-pipeline-intelligence.md) · [illustrated](docs/manual-demo-flows/manual-demo-pipeline-intelligence-illustrated.md) | Building a pipeline by hand on the unparsed JSON stream |
 | 3 | [Full Pipeline Blueprints](docs/manual-demo-flows/manual-demo-full-pipeline-blueprints.md) · [illustrated](docs/manual-demo-flows/manual-demo-full-pipeline-blueprints-illustrated.md) | Not building one — parse, enrich and reduce, shipped |
-| 4 | [Progressive Rollouts and Rollbacks](docs/manual-demo-flows/manual-demo-progressive-rollouts-and-rollbacks.md) | Canary → prod staging, halting on error, rollback |
+| 4 | [Progressive Rollouts and Rollbacks](docs/manual-demo-flows/manual-demo-progressive-rollouts-and-rollbacks.md) · [illustrated](docs/manual-demo-flows/manual-demo-progressive-rollouts-and-rollbacks-illustrated.md) | Canary → prod staging, halting on error, rollback |
 
 Per-stream background is in [`docs/claude-generated/`](docs/claude-generated/).
 
