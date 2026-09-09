@@ -178,6 +178,8 @@ bindplane rollout start grrcon-winsec
 bindplane delete configuration <the config you created in Part 1>
 ```
 
+These follow whichever profile is active — check `bindplane profile current`.
+
 A new config can claim an unbound twin collector, so confirm five `bdot-*-unbound`
 are still unbound afterwards. If you also run the Advanced Pipeline Editor demo,
 add the SecOps blueprint to `grrcon-gateway` there and `grrcon-winsec` here —

@@ -28,6 +28,11 @@ to the account separately.
 
 ## Quick start
 
+**Pick a server first.** Cloud needs an account and a secret key. The
+self-hosted stack in [`selfhosted/`](selfhosted/README.md) needs neither, works
+offline, and keeps its rollout history — start there if you are rehearsing.
+Below is the cloud path; self-hosted differs only in `.env` and the CLI profile.
+
 ```bash
 cp .env.example .env                  # fill in BINDPLANE_SECRET_KEY
 mkdir -p logs/apache2 logs/cef && chmod 777 logs/apache2 logs/cef
@@ -38,6 +43,10 @@ bindplane rollout start grrcon-gateway
 bindplane rollout start grrcon-edge
 docker compose -f docker-compose.blitz.yaml up -d
 ```
+
+Whichever you pick, `bindplane profile current` and `OPAMP_ENDPOINT` in `.env`
+must agree — they are set independently, and both report success while pointing
+at different servers.
 
 **`apply` before `up`.** A collector's `configuration=` label binds only when its
 value changes while the named configuration already exists. Start the collectors

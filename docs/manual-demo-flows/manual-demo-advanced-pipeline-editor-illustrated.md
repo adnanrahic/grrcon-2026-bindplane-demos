@@ -167,6 +167,8 @@ bindplane apply -f bindplane/40-gateway.yaml
 bindplane rollout start grrcon-gateway
 ```
 
+These follow whichever profile is active — check `bindplane profile current`.
+
 If you also plan to run the Full Pipeline Blueprints demo, add this blueprint to
 `grrcon-winsec` there instead — otherwise you show the same thing twice. See
 `RUNNING-THESE-DEMOS.md`.

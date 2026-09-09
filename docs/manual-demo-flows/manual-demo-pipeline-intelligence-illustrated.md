@@ -164,5 +164,7 @@ bindplane apply -f bindplane/20-source-appjson.yaml
 bindplane rollout start grrcon-appjson
 ```
 
+These follow whichever profile is active — check `bindplane profile current`.
+
 If you saved the chain as a bundle, delete it too, or the next run starts halfway
 done. See `RUNNING-THESE-DEMOS.md`.

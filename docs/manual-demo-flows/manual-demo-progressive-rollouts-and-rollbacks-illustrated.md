@@ -9,9 +9,15 @@ The other three demos change what a pipeline *does*. This one is about shipping
 that change to ten collectors without breaking anything — and undoing it.
 
 > **Check this before you present.** The rollback half needs a *previous*
-> version to go back to, and the nightly wipe resets every config to `v1`. Run
-> `bindplane get configurations | grep grrcon`; if `grrcon-gateway` is at `1`,
-> make a throwaway change and roll it out first so History has two rows.
+> version to go back to. Run `bindplane get configurations | grep grrcon`; if
+> `grrcon-gateway` is at `1`, make a throwaway change and roll it out first so
+> History has two rows.
+>
+> **This is the demo to run on `selfhosted/`.** Cloud's nightly wipe resets
+> every config to `v1`, so most mornings there is nothing to roll back to. The
+> self-hosted server keeps its history in a local postgres volume, so the
+> version list is still there tomorrow — see
+> [`../../selfhosted/README.md`](../../selfhosted/README.md).
 
 ---
 
@@ -157,13 +163,15 @@ rollback is as controlled as the rollout".
 
 ## Afterwards
 
-The nightly wipe resets everything to `v1` anyway, but if you are running
-another demo the same day, put the config back:
+On cloud the nightly wipe resets everything to `v1` anyway. On self-hosted it
+does not, so put the config back before the next run:
 
 ```bash
 bindplane apply -f bindplane/40-gateway.yaml
 bindplane rollout start grrcon-gateway   # then Continue Rollout to Prod
 ```
+
+These follow whichever profile is active — check `bindplane profile current`.
 
 Leaving it mid-rollout is fine and honest — a paused rollout is a valid state,
 not a broken one. Just do not let the next presenter mistake it for an outage;
