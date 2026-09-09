@@ -73,14 +73,19 @@ bindplane rollout start grrcon-edge
 ```
 
 Then run the flows in order — topology, build one by hand, get one for free,
-ship it safely:
+ship it safely. Each has a terse **flow** doc and an **illustrated** guide with a
+screenshot per step:
 
-| # | Flow | Shows |
-|---|---|---|
-| 1 | [Advanced Pipeline Editor](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor.md) · [illustrated](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor-illustrated.md) | Edge/gateway architecture and the routing connector |
-| 2 | [Pipeline Intelligence](docs/manual-demo-flows/manual-demo-pipeline-intelligence.md) · [illustrated](docs/manual-demo-flows/manual-demo-pipeline-intelligence-illustrated.md) | Building a pipeline by hand on the unparsed JSON stream |
-| 3 | [Full Pipeline Blueprints](docs/manual-demo-flows/manual-demo-full-pipeline-blueprints.md) · [illustrated](docs/manual-demo-flows/manual-demo-full-pipeline-blueprints-illustrated.md) | Not building one — parse, enrich and reduce, shipped |
-| 4 | [Progressive Rollouts and Rollbacks](docs/manual-demo-flows/manual-demo-progressive-rollouts-and-rollbacks.md) · [illustrated](docs/manual-demo-flows/manual-demo-progressive-rollouts-and-rollbacks-illustrated.md) | Canary → prod staging, halting on error, rollback |
+| # | Demo | Shows | Flow | Illustrated |
+|---|---|---|---|---|
+| 1 | Advanced Pipeline Editor | Edge/gateway architecture and the routing connector | [flow](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor.md) | [screenshots](docs/manual-demo-flows/manual-demo-advanced-pipeline-editor-illustrated.md) |
+| 2 | Pipeline Intelligence | Building a pipeline by hand on the unparsed JSON stream | [flow](docs/manual-demo-flows/manual-demo-pipeline-intelligence.md) | [screenshots](docs/manual-demo-flows/manual-demo-pipeline-intelligence-illustrated.md) |
+| 3 | Full Pipeline Blueprints | Not building one — parse, enrich and reduce, shipped | [flow](docs/manual-demo-flows/manual-demo-full-pipeline-blueprints.md) | [screenshots](docs/manual-demo-flows/manual-demo-full-pipeline-blueprints-illustrated.md) |
+| 4 | Progressive Rollouts and Rollbacks | Canary → prod staging, halting on error, rollback | [flow](docs/manual-demo-flows/manual-demo-progressive-rollouts-and-rollbacks.md) | [screenshots](docs/manual-demo-flows/manual-demo-progressive-rollouts-and-rollbacks-illustrated.md) |
+
+Use the illustrated guide when rehearsing or handing a demo to someone who has
+not run it — it shows the paused and half-migrated states that read as faults.
+Use the flow doc live; it is the shorter prompt.
 
 Per-stream background is in [`docs/claude-generated/`](docs/claude-generated/).
 
@@ -92,7 +97,7 @@ Per-stream background is in [`docs/claude-generated/`](docs/claude-generated/).
 | `docker-compose.yaml` | The 30 collectors |
 | `docker-compose.blitz.yaml` | Telemetry generators |
 | `samples/` | Replay data, vendored so no blitz checkout is required |
-| `docs/manual-demo-flows/` | The demo scripts, plus the runbook for presenting them |
+| `docs/manual-demo-flows/` | Each demo twice — terse flow and illustrated click guide — plus the runbook and screenshots |
 | `docs/claude-generated/` | Per-stream background — one walkthrough per stream |
 | `.claude/` | Full reference, split by topic. Start at `.claude/00-index.md`. |
 
