@@ -58,15 +58,27 @@ BINDPLANE_SECRET_KEY=<SECRETKEY from the project>
 OPAMP_ENDPOINT=ws://host.docker.internal:3001/v1/opamp
 ```
 
-`ws://`, not `wss://` — this stack terminates no TLS. Then recreate so the
-collectors pick up the new endpoint:
+`ws://`, not `wss://` — this stack terminates no TLS. Then **drop the collector
+volumes**, which is what actually moves them:
 
 ```bash
-docker compose up -d --force-recreate
+docker compose down -v && docker compose up -d
 ```
 
-**Remember to change it back afterwards.** A half-reverted `.env` leaves some
-collectors on the wrong server, and they look connected either way.
+**`--force-recreate` is not enough, and fails silently.** Each collector
+persists `manager.yaml` in its storage volume, holding the endpoint and secret
+key it first registered with — and that file wins over `OPAMP_ENDPOINT` and
+`OPAMP_SECRET_KEY`. Recreate the containers without dropping the volumes and
+every one keeps dialling the old server: `401 Unauthorized`, `websocket: bad
+handshake`, retrying forever, while compose reports a clean start. Same family
+as the cached-labels problem in `.claude/70-operations.md`.
+
+Dropping the volumes also clears the pinned agent IDs' local state, so they
+re-register from scratch — which is what you want when moving servers.
+
+**Remember to change it back afterwards** (the same `down -v` dance). A
+half-reverted `.env` leaves some collectors on the wrong server, and they look
+connected either way.
 
 ## Point the CLI at it
 
@@ -94,7 +106,10 @@ bindplane --profile local rollout start grrcon-edge
 ```
 
 Verified against an empty server: 7 configurations and 6 destinations, no
-ordering errors.
+ordering errors. If the collectors are already pointed here, the `rollout start`
+lines are usually no-ops — agents registering against a fresh server pick up the
+current version directly and report `Stable`, so the usual "label only binds
+when its value changes" trap does not apply.
 
 Then run the normal pre-flight in
 [`../docs/manual-demo-flows/RUNNING-THESE-DEMOS.md`](../docs/manual-demo-flows/RUNNING-THESE-DEMOS.md).

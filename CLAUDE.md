@@ -62,6 +62,12 @@ worked until the running system says so.
 
 ## Gotchas specific to this setup
 
+**A collector's `manager.yaml` outranks its environment.** Each storage volume
+persists the endpoint, agent ID and secret key from first registration, and
+that file wins over `OPAMP_ENDPOINT`/`OPAMP_SECRET_KEY`. Moving collectors
+between servers needs `docker compose down -v`, not `--force-recreate` — which
+fails as 401s in the collector log while compose reports a clean start.
+
 **Agent labels are cached server-side.** Agent IDs are pinned ULIDs, so Bindplane
 keeps the labels it already holds and ignores what a re-registering collector
 reports. Editing `OPAMP_LABELS` in compose does nothing on its own — relabel with
