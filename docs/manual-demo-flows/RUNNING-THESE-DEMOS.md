@@ -14,14 +14,26 @@ it safely:
 | 3 | Full Pipeline Blueprints — don't build a pipeline | [flow](manual-demo-full-pipeline-blueprints.md) | [screenshots](manual-demo-full-pipeline-blueprints-illustrated.md) |
 | 4 | Progressive Rollouts and Rollbacks | [flow](manual-demo-progressive-rollouts-and-rollbacks.md) | [screenshots](manual-demo-progressive-rollouts-and-rollbacks-illustrated.md) |
 
-Rehearsing, or handing a demo to someone who has not run it? Use the illustrated
-guide — it shows the screen you should be looking at, including the paused and
-half-migrated states that read as faults. Running it live? The flow doc is the
-shorter prompt.
+Rehearsing, or handing a demo over? Use the illustrated guide — it shows the
+paused and half-migrated states that read as faults. Live? The flow doc, which
+is the shorter prompt.
 
 ## Before you present (5 min)
 
-**A nightly job wipes the `grrcon-*` resources**, so start here every morning:
+**Which server are you on?** Answer this before anything else — the CLI and the
+collectors are pointed independently, and both look fine when they disagree:
+
+```bash
+bindplane profile current                            # default = cloud, local = selfhosted/
+grep '^OPAMP_ENDPOINT' .env                          # must agree with the profile
+```
+
+If they disagree, `bindplane apply` writes to one server while the collectors
+obey the other, reporting success both times. See
+[`../../selfhosted/README.md`](../../selfhosted/README.md).
+
+**A nightly job wipes the `grrcon-*` resources** on cloud (not self-hosted), so
+start here every morning:
 
 ```bash
 bindplane get configurations | grep grrcon           # 7 -- if empty, see recovery
@@ -34,10 +46,14 @@ bindplane get agents --selector fleet=grrcon-gateway # 10
 Then confirm data is actually moving — every source collector should be non-zero:
 
 ```bash
-for row in bdot-apache:Elastic bdot-cef:Splunk bdot-panos:Dynatrace \
-           bdot-appjson:googlecloud bdot-winsec:SecOps; do
-  n=${row%%:*}; d=${row##*:}
-  printf "%-14s %s\n" "$n" "$(docker logs --since 60s $n 2>&1 | grep -c "$d")"
+for row in bdot-apache:otlp_http/grrcon-elastic \
+           bdot-cef:splunk_hec/grrcon-splunk-hec__logs \
+           bdot-panos:otlp_http/grrcon-dynatrace \
+           bdot-appjson:googlecloud/grrcon-google-gcl \
+           bdot-winsec:chronicle/grrcon-google-secops; do
+  n=${row%%:*}; d=${row#*:}
+  printf "%-14s %s\n" "$n" \
+    "$(docker logs --since 60s $n 2>&1 | grep -c "\"otelcol.component.id\":\"$d\"")"
 done
 ```
 
@@ -62,9 +78,9 @@ quietly" below.
 
 ## If it's broken on stage
 
-**No `grrcon-*` configs, or pipeline collectors unbound.** Expected — **a nightly
-job wipes them**, so the account is empty most mornings. Everything rebuilds from
-the repo:
+**No `grrcon-*` configs, or pipeline collectors unbound.** Expected on cloud — **a
+nightly job wipes them**, so the account is empty most mornings. On self-hosted
+it means the postgres volume was dropped. Either way it rebuilds from the repo:
 
 ```bash
 bindplane apply -f bindplane/
@@ -73,7 +89,9 @@ bindplane rollout start grrcon-edge
 ```
 
 **Still unbound after the apply.** The `configuration=` label only binds when its
-value *changes* while the config exists. Force it:
+value *changes* while the config exists. This is a cloud problem — a fresh
+self-hosted server has no cached labels, so collectors bind on first
+registration. Force it:
 
 ```bash
 bindplane label agent --selector fleet=grrcon-edge configuration=none --overwrite

@@ -52,7 +52,13 @@ collectors move over by editing two lines in `.env`; nothing in
 `docker-compose.yaml` changes.
 
 The nightly wipe does not reach it either, so rollout history survives between
-rehearsals.
+rehearsals — which the Progressive Rollouts demo needs and cloud rarely has.
+
+Two things that will catch you: switching needs `docker compose down -v`, not
+`--force-recreate` (each collector persists the endpoint it first registered
+with, and that file wins), and the CLI is pointed separately from the collectors
+— `bindplane profile use local`, or `apply` keeps writing to cloud and says it
+worked.
 
 ## Verify
 

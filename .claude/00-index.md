@@ -12,7 +12,7 @@ detail behind it.
 | File | Covers |
 |---|---|
 | `10-architecture.md` | Topology, tiers, fleets, why it is shaped this way |
-| `20-setup.md` | Env, dummy credentials, log dirs, CLI profile, apply order, v2 |
+| `20-setup.md` | Env, dummy credentials, log dirs, CLI profiles, apply order, v2 |
 | `30-pipelines.md` | The five pipelines, unbound twins, edge mirroring, generators |
 | `40-backends.md` | Backend state, Google-GCL vs grrcon-google-gcl, native formats |
 | `50-routing.md` | Router wiring, misroute detection, `log_type`, record shape |
@@ -20,5 +20,6 @@ detail behind it.
 | `60-blitz-data.md` | What each blitz generator emits |
 | `70-operations.md` | Verify commands, progressive rollout, unbound recovery |
 | `80-maintenance.md` | Collector type, rebuild, relabel, reset, file map |
+| `90-selfhosted.md` | Running the demo with no cloud account: `selfhosted/` |
 
 Demo walkthroughs live in `docs/`.

@@ -18,6 +18,10 @@ metadata:
 
 ## Rebuilding after the nightly wipe
 
+**Cloud only.** The self-hosted server in `selfhosted/` keeps its resources in a
+local postgres volume, so nothing is wiped and version history survives between
+rehearsals — see `90-selfhosted.md`.
+
 **A nightly job deletes the `grrcon-*` resources.** Observed empty on the
 mornings of 2026-09-07 and 2026-09-08; resources applied during the day survive
 until the next night. Assume you are rebuilding every morning.

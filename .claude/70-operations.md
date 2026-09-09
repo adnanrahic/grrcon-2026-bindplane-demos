@@ -40,11 +40,14 @@ each names its exporter, so a non-zero count per collector proves records reache
 it:
 
 ```bash
-for row in bdot-apache:Elastic bdot-cef:Splunk bdot-panos:Dynatrace \
-           bdot-appjson:googlecloud bdot-winsec:SecOps; do
-  n=${row%%:*}; d=${row##*:}
-  printf "%-14s -> %-10s %s\n" "$n" "$d" \
-    "$(docker logs --since 60s $n 2>&1 | grep -c "$d")"
+for row in bdot-apache:otlp_http/grrcon-elastic \
+           bdot-cef:splunk_hec/grrcon-splunk-hec__logs \
+           bdot-panos:otlp_http/grrcon-dynatrace \
+           bdot-appjson:googlecloud/grrcon-google-gcl \
+           bdot-winsec:chronicle/grrcon-google-secops; do
+  n=${row%%:*}; d=${row#*:}
+  printf "%-14s %s\n" "$n" \
+    "$(docker logs --since 60s $n 2>&1 | grep -c "\"otelcol.component.id\":\"$d\"")"
 done
 ```
 
@@ -138,6 +141,11 @@ observed for real earlier in this project, when a bad SecOps credentials path
 stopped a rollout at one collector while the other nine stayed up.
 
 ## Recovering an unbound collector
+
+Both recoveries below are about **state the collector or server already holds
+beating what you tell it**. The same shape bites when moving between servers:
+`manager.yaml` in each storage volume outranks `OPAMP_ENDPOINT`, so switching
+needs `docker compose down -v`, not `--force-recreate`. See `90-selfhosted.md`.
 
 If `bindplane get agents` shows `CONFIGURATION: -` on a collector whose labels
 clearly include `configuration=<name>`, the binding never fired. Force it by

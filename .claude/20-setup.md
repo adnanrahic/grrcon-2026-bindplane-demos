@@ -83,6 +83,21 @@ Note this is an **API key**, a different credential from the
 `BINDPLANE_SECRET_KEY` in `.env`. The secret key authenticates *collectors* over
 OpAMP; the API key authenticates the *CLI* against the management API.
 
+Self-hosted uses **basic auth instead of an API key**, and its collector secret
+key is generated per project rather than chosen. Keep it as a second profile so
+you can switch both halves deliberately:
+
+```bash
+bindplane profile create local
+bindplane profile set local --remote-url http://localhost:3001 \
+                            --username admin --password admin
+bindplane profile use local        # `use default` goes back to cloud
+```
+
+The CLI profile and the collectors' `OPAMP_ENDPOINT` are set independently, and
+each reports success while pointing somewhere else — `bindplane profile current`
+belongs in every pre-flight. See `90-selfhosted.md`.
+
 ### 5. Apply, start, roll out -- in this order
 
 ```bash
