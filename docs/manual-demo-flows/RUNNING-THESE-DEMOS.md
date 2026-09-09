@@ -1,15 +1,23 @@
 # Running these demos in person
 
-The four `manual-demo-*.md` files are the clicks. This is everything else:
+Each demo ships two files — a terse **flow** doc, and an **illustrated** click
+guide with a screenshot per step. Those are the clicks. This is everything else:
 what to check first, what will look broken when it isn't, and how to recover.
 
 Suggested order — topology, then build by hand, then get it for free, then ship
 it safely:
 
-1. Advanced Pipeline Editor (edge/gateway architecture)
-2. Pipeline Intelligence (build a pipeline)
-3. Full Pipeline Blueprints (don't build a pipeline)
-4. Progressive Rollouts and Rollbacks
+| # | Demo | Flow | Illustrated |
+|---|---|---|---|
+| 1 | Advanced Pipeline Editor — edge/gateway architecture | [flow](manual-demo-advanced-pipeline-editor.md) | [screenshots](manual-demo-advanced-pipeline-editor-illustrated.md) |
+| 2 | Pipeline Intelligence — build a pipeline | [flow](manual-demo-pipeline-intelligence.md) | [screenshots](manual-demo-pipeline-intelligence-illustrated.md) |
+| 3 | Full Pipeline Blueprints — don't build a pipeline | [flow](manual-demo-full-pipeline-blueprints.md) | [screenshots](manual-demo-full-pipeline-blueprints-illustrated.md) |
+| 4 | Progressive Rollouts and Rollbacks | [flow](manual-demo-progressive-rollouts-and-rollbacks.md) | [screenshots](manual-demo-progressive-rollouts-and-rollbacks-illustrated.md) |
+
+Rehearsing, or handing a demo to someone who has not run it? Use the illustrated
+guide — it shows the screen you should be looking at, including the paused and
+half-migrated states that read as faults. Running it live? The flow doc is the
+shorter prompt.
 
 ## Before you present (5 min)
 
