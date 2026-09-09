@@ -1,0 +1,114 @@
+# Self-hosted Bindplane for the GrrCON demo.
+#
+# A complete Bindplane stack -- server, postgres, prometheus, transform agent --
+# so the demo runs with no internet and no risk to the shared cloud account.
+# This is its OWN compose project (`bindplane-selfhosted`); the 30 demo
+# collectors in ../docker-compose.yaml are a separate stack and either can be
+# started first.
+#
+# The collectors reach the server over the host, at
+# ws://host.docker.internal:3001/v1/opamp. Only port 3001 is published; that one
+# port serves the UI, the CLI and OpAMP. See ./README.md for the switch.
+#
+# There is NO TLS here, so agents use ws:// -- not wss://.
+
+name: bindplane-selfhosted
+
+volumes:
+  postgres:
+  prometheus:
+
+services:
+  # ---------------------------------------------------------------------------
+  # The Bindplane server. Everything an agent, the UI and the CLI talk to.
+  # ---------------------------------------------------------------------------
+  bindplane:
+    image: ghcr.io/observiq/bindplane-ee:${BINDPLANE_VERSION:-1.102.0}
+    container_name: bindplane-server
+    restart: unless-stopped
+    ports:
+      - "${BINDPLANE_PORT:-3001}:3001"
+    environment:
+      # Web UI + CLI basic auth. Self-hosted has no API key -- the CLI profile
+      # authenticates with these, not with an --api-key.
+      BINDPLANE_USERNAME: ${BINDPLANE_USERNAME:-admin}
+      BINDPLANE_PASSWORD: ${BINDPLANE_PASSWORD:-admin}
+
+      # Where agents send measurements and health. Must be reachable FROM a
+      # collector container, which is why it is host.docker.internal and not
+      # localhost.
+      BINDPLANE_REMOTE_URL: http://host.docker.internal:${BINDPLANE_PORT:-3001}
+
+      # NOTE: there is deliberately no BINDPLANE_SECRET_KEY here. In EE's
+      # multi-project model the key agents authenticate with belongs to the
+      # PROJECT and is generated when you create it -- a server-level key gets
+      # agents a 401. Read the real one from `bindplane get projects`.
+      BINDPLANE_SESSION_SECRET: ${BINDPLANE_SESSION_SECRET:?set BINDPLANE_SESSION_SECRET in selfhosted/.env}
+      BINDPLANE_LICENSE: ${BINDPLANE_LICENSE:?set BINDPLANE_LICENSE in selfhosted/.env -- it is deliberately not committed}
+
+      BINDPLANE_LOG_OUTPUT: stdout
+      BINDPLANE_ACCEPT_EULA: "true"
+
+      BINDPLANE_PROMETHEUS_ENABLE: "true"
+      BINDPLANE_PROMETHEUS_ENABLE_REMOTE: "true"
+      BINDPLANE_PROMETHEUS_HOST: prometheus
+      BINDPLANE_PROMETHEUS_PORT: "9090"
+
+      BINDPLANE_TRANSFORM_AGENT_ENABLE_REMOTE: "true"
+      BINDPLANE_TRANSFORM_AGENT_REMOTE_AGENTS: transform:4568
+
+      BINDPLANE_STORE_TYPE: postgres
+      BINDPLANE_POSTGRES_HOST: postgres
+      BINDPLANE_POSTGRES_PORT: "5432"
+      BINDPLANE_POSTGRES_DATABASE: ${POSTGRES_DB:-bindplane}
+      BINDPLANE_POSTGRES_USERNAME: ${POSTGRES_USER:-bindplane}
+      BINDPLANE_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+      transform:
+        condition: service_started
+
+  # ---------------------------------------------------------------------------
+  # Resource store. Configurations, sources, destinations, rollout history --
+  # all of it lives here, which is why the volume is what you delete to reset.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16
+    container_name: bindplane-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bindplane}
+      POSTGRES_USER: ${POSTGRES_USER:-bindplane}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      # Without this the server races postgres on a cold start and restarts.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bindplane} -d ${POSTGRES_DB:-bindplane}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ---------------------------------------------------------------------------
+  # Throughput metrics -- the per-edge counts in the pipeline graph. If this is
+  # down the graphs are empty but telemetry still flows.
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: ghcr.io/observiq/bindplane-prometheus:${BINDPLANE_VERSION:-1.102.0}
+    container_name: bindplane-prometheus
+    restart: unless-stopped
+    volumes:
+      - prometheus:/prometheus
+
+  # ---------------------------------------------------------------------------
+  # Evaluates processors against sample logs -- the live before/after preview in
+  # the processor panel. Pipeline Intelligence and the blueprint demos are
+  # visibly broken without it, so it is not optional here.
+  # ---------------------------------------------------------------------------
+  transform:
+    image: ghcr.io/observiq/bindplane-transform-agent:${BINDPLANE_VERSION:-1.102.0}-bindplane
+    container_name: bindplane-transform-agent
+    restart: unless-stopped

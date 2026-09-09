@@ -1,4 +1,5 @@
 .env
+selfhosted/.env
 credentials.json
 plan.md
 logs/

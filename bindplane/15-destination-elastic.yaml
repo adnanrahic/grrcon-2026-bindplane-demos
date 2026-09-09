@@ -1,0 +1,25 @@
+# Elasticsearch for the Apache stream.
+#
+# In a 15- file because 20-source-apache.yaml references it: apply runs in
+# filename order, so defining it later fails with "unknown Destination" against
+# a fresh account. That only shows up on a fresh account -- see selfhosted/.
+#
+# server_url/secret_token are REPLACE_ME. Every backend here fails to export by
+# design; the export errors are the evidence records arrived.
+---
+apiVersion: bindplane.observiq.com/v1
+kind: Destination
+metadata:
+  name: Elastic
+spec:
+  type: elasticsearch_otlp
+  parameters:
+  - name: telemetry_types
+    value:
+    - Logs
+  - name: deployment_type
+    value: Elastic Cloud
+  - name: server_url
+    value: https://REPLACE_ME.apm.us-central1.gcp.cloud.es.io:443
+  - name: secret_token
+    value: REPLACE_ME

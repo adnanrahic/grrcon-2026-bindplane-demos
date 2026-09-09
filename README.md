@@ -43,6 +43,17 @@ docker compose -f docker-compose.blitz.yaml up -d
 value changes while the named configuration already exists. Start the collectors
 first and they sit at `CONFIGURATION: -` permanently.
 
+## Run it without the cloud
+
+[`selfhosted/`](selfhosted/README.md) brings up a complete Bindplane server —
+server, postgres, prometheus, transform agent — as its own compose stack, so the
+demo survives conference wifi and cannot disturb the shared cloud account. The
+collectors move over by editing two lines in `.env`; nothing in
+`docker-compose.yaml` changes.
+
+The nightly wipe does not reach it either, so rollout history survives between
+rehearsals.
+
 ## Verify
 
 ```bash
@@ -94,6 +105,7 @@ Per-stream background is in [`docs/claude-generated/`](docs/claude-generated/).
 | Path | Contents |
 |---|---|
 | `bindplane/` | Sources, destinations, connector, configurations, fleets. Applied in filename order. |
+| `selfhosted/` | A full Bindplane server in Docker — run the demo with no cloud account |
 | `docker-compose.yaml` | The 30 collectors |
 | `docker-compose.blitz.yaml` | Telemetry generators |
 | `samples/` | Replay data, vendored so no blitz checkout is required |
@@ -103,7 +115,9 @@ Per-stream background is in [`docs/claude-generated/`](docs/claude-generated/).
 
 ## Requirements
 
-Docker, a Bindplane Cloud account, and the `bindplane` CLI.
+Docker, the `bindplane` CLI, and either a Bindplane Cloud account or the
+self-hosted stack in [`selfhosted/`](selfhosted/README.md) (which needs a
+Bindplane EE license).
 
 No [blitz](https://github.com/observIQ/blitz) checkout is needed — every sample
 the generators replay is vendored into `samples/`. Refreshing the Palo Alto

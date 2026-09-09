@@ -20,6 +20,11 @@
 x-bdot: &bdot
   image: ghcr.io/observiq/bindplane-agent:${BDOT_VERSION:-1.106.0}
   restart: unless-stopped
+  # Only needed to reach the self-hosted server (selfhosted/) on plain Linux
+  # Docker; Docker Desktop resolves host.docker.internal without it. Harmless
+  # otherwise, and unused when OPAMP_ENDPOINT points at Bindplane Cloud.
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
 
 x-bdot-env: &bdot-env
   OPAMP_ENDPOINT: ${OPAMP_ENDPOINT:-wss://app.bindplane.com/v1/opamp}

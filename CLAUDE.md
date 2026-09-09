@@ -13,6 +13,8 @@ account** — treat every apply as production.
 - `docs/` — one demo walkthrough per stream
 - `bindplane/` — the resources; applied in **filename order**
 - `samples/`, `docker-compose*.yaml`, `logs/` (gitignored)
+- `selfhosted/` — a full Bindplane server in Docker, for running the demo with
+  no cloud account; has its own README
 
 Every markdown file in this repo is **capped at 200 lines**. Split rather than
 exceed it.
@@ -69,6 +71,12 @@ reports. Editing `OPAMP_LABELS` in compose does nothing on its own — relabel w
 a mocked service-account key. Export errors are the *evidence records arrived* —
 count them per exporter to prove a route works. Google SecOps is the exception:
 it fails quietly, so a low error count there is not success.
+
+**Only `grrcon-*` resources are wiped nightly.** `Elastic`, `Dynatrace`,
+`Google-SecOps-Linux` and `Splunk-HEC` carry no prefix, so they survive — which
+is why their absence from `bindplane/` went unnoticed for so long. They are
+committed now; a fresh server (`selfhosted/`) is the only thing that catches
+this class of gap, because cloud always has the leftovers.
 
 **A nightly job wipes the `grrcon-*` resources.** Assume the account is empty
 every morning: check before doing anything, and expect to `bindplane apply -f

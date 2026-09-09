@@ -1,0 +1,25 @@
+# Dynatrace for the Palo Alto stream, and the node the PAN enrichment blueprint
+# attaches to in grrcon-gateway.
+#
+# In a 15- file because 20-source-panos.yaml references it -- see
+# 15-destination-elastic.yaml for why filename order matters.
+#
+# your_environment_id/dynatrace_api_token are REPLACE_ME; the tenant is stale by
+# design.
+---
+apiVersion: bindplane.observiq.com/v1
+kind: Destination
+metadata:
+  name: Dynatrace
+spec:
+  type: dynatrace_otlp
+  parameters:
+  - name: telemetry_types
+    value:
+    - Logs
+  - name: deployment_type
+    value: SaaS
+  - name: your_environment_id
+    value: REPLACE_ME
+  - name: dynatrace_api_token
+    value: REPLACE_ME

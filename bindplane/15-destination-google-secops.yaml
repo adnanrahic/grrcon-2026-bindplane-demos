@@ -1,0 +1,29 @@
+# Google SecOps (Chronicle) for the Windows Security stream.
+#
+# In a 15- file because 20-source-winsec.yaml references it -- see
+# 15-destination-elastic.yaml for why filename order matters.
+#
+# credentials_file points at the mocked service-account key mounted into
+# bdot-winsec (./credentials.json:/opt/credentials.json:ro in
+# docker-compose.yaml). SecOps is the backend that fails QUIETLY, so a low error
+# count here is not evidence the route works -- use Bindplane throughput.
+---
+apiVersion: bindplane.observiq.com/v1
+kind: Destination
+metadata:
+  name: Google-SecOps-Linux
+spec:
+  type: chronicle
+  parameters:
+  - name: protocol
+    value: https
+  - name: https_endpoint
+    value: chronicle.googleapis.com
+  - name: auth_type
+    value: file
+  - name: credentials_file
+    value: /opt/credentials.json
+  - name: customer_id
+    value: 00000000-0000-0000-0000-000000000000
+  - name: project
+    value: REPLACE_ME
