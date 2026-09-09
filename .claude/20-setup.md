@@ -126,12 +126,12 @@ sources:
       logs:
         - id: "0"
           components:
-            - destinations/d-Google-SecOps-Linux
-            - destinations/d-Splunk-HEC
+            - destinations/d-grrcon-google-secops
+            - destinations/d-grrcon-splunk-hec
             - ...
 ```
 
-Routing respects each destination's `telemetry_types`: `Splunk-HEC` is declared
+Routing respects each destination's `telemetry_types`: `grrcon-splunk-hec` is declared
 logs-only, so it appears under `logs` and not under `metrics` or `traces`.
 
 Only the `Configuration` documents are v2. `Source` and `Destination` resources

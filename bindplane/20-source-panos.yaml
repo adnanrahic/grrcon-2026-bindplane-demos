@@ -38,7 +38,7 @@ spec:
       logs:
       - id: '0'
         components:
-        - destinations/d-Dynatrace
+        - destinations/d-grrcon-dynatrace
   destinations:
-  - id: d-Dynatrace
-    name: Dynatrace
+  - id: d-grrcon-dynatrace
+    name: grrcon-dynatrace

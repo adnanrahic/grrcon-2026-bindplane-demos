@@ -26,10 +26,10 @@ spec:
       routes:
         logs:
           - id: winsec                                  # id MUST match a route
-            components: [destinations/d-Google-SecOps-Linux]  # id in router.yaml
+            components: [destinations/d-grrcon-google-secops]  # id in router.yaml
   destinations:
-    - id: d-Google-SecOps-Linux
-      name: Google-SecOps-Linux
+    - id: d-grrcon-google-secops
+      name: grrcon-google-secops
 ```
 
 Routes are **first match wins**. The connector still declares an unconditioned
@@ -86,11 +86,11 @@ gateway tier and read 0 over 60s while healthy at 244 over 3m.
 
 The component-id form is still preferred, for two reasons that are not about
 accuracy: it enumerates every exporter including ones you forgot to list (that
-is how `chronicle/Google-SecOps-Linux` shows up at all), and it cannot be fooled
+is how `chronicle/grrcon-google-secops` shows up at all), and it cannot be fooled
 by a backend name appearing in unrelated text.
 
 The chronicle exporter still fails quietly — 7 lines in 3m against Splunk's
-1674 — so a low `chronicle/Google-SecOps-Linux` count is not evidence of a
+1674 — so a low `chronicle/grrcon-google-secops` count is not evidence of a
 problem. Use UI throughput for the winsec branch.
 
 To read the records, wire a temporary debug destination to `unmatched`; see

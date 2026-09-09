@@ -10,7 +10,7 @@
 apiVersion: bindplane.observiq.com/v1
 kind: Destination
 metadata:
-  name: Splunk-HEC
+  name: grrcon-splunk-hec
 spec:
   type: splunkhec_v2
   parameters:

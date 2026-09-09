@@ -8,11 +8,11 @@ Five independent pipelines, one Bindplane configuration each:
 
 | Pipeline | Collector | Source type | Ingest | Destination |
 |---|---|---|---|---|
-| `grrcon-winsec` | `bdot-winsec` | `tcp` (`parse_format: none`) | tcp :5142 | `Google-SecOps-Linux` |
-| `grrcon-panos` | `bdot-panos` | `tcp` (`parse_format: none`) | tcp :5141 | `Dynatrace` |
+| `grrcon-winsec` | `bdot-winsec` | `tcp` (`parse_format: none`) | tcp :5142 | `grrcon-google-secops` |
+| `grrcon-panos` | `bdot-panos` | `tcp` (`parse_format: none`) | tcp :5141 | `grrcon-dynatrace` |
 | `grrcon-appjson` | `bdot-appjson` | `tcp` (`parse_format: json`) | tcp :5143 | `grrcon-google-gcl` |
-| `grrcon-cef` | `bdot-cef` | `common_event_format` | file | `Splunk-HEC` |
-| `grrcon-apache` | `bdot-apache` | `apache_common` | file | `Elastic` |
+| `grrcon-cef` | `bdot-cef` | `common_event_format` | file | `grrcon-splunk-hec` |
+| `grrcon-apache` | `bdot-apache` | `apache_common` | file | `grrcon-elastic` |
 
 Each source stamps its own `log_type`, so there is no routing connector and no
 `appname` coupling: **the collector a stream lands on is its identity.**
@@ -136,15 +136,15 @@ Because the edge tier now exports to Google SecOps, it mounts `credentials.json`
 — the chronicle exporter reads it at startup and the collector will not start
 without it.
 
-`grrcon-google-gcl` is the exception to the rule below: it is defined in
-`bindplane/15-destination-google-gcl.yaml` rather than referenced, because the
-account's shared `Google-GCL` cannot work here -- see [Why not the shared
-Google-GCL](#why-not-the-shared-google-gcl).
+**Every destination is defined in `bindplane/`, and every one is `grrcon-`
+prefixed.** The repo owns all six; none is shared with the rest of the account.
+That is deliberate -- the earlier arrangement referenced the account's
+`Elastic`, `Dynatrace`, `Google-SecOps-Linux` and `Splunk-HEC` by name, so
+`bindplane apply` silently overwrote resources other demos use. The prefix also
+means they are wiped and rebuilt nightly with everything else, instead of being
+invisible leftovers that hide gaps in `bindplane/`.
 
-`Google-SecOps-Linux`, `Elastic` and `Dynatrace` are pre-existing resources in
-the Bindplane account, referenced by name rather than redefined so they keep
-their real credentials. `bindplane apply` against a **fresh** account needs those
-three created first. `Splunk-HEC` is defined in `bindplane/40-gateway.yaml`.
+Credentials are all `REPLACE_ME` by design -- see `.claude/40-backends.md`.
 
 ---
 

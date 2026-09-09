@@ -11,7 +11,7 @@
 apiVersion: bindplane.observiq.com/v1
 kind: Destination
 metadata:
-  name: Google-SecOps-Linux
+  name: grrcon-google-secops
 spec:
   type: chronicle
   parameters:

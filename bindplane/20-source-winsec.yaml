@@ -44,7 +44,7 @@ spec:
       logs:
       - id: '0'
         components:
-        - destinations/d-Google-SecOps-Linux
+        - destinations/d-grrcon-google-secops
   destinations:
-  - id: d-Google-SecOps-Linux
-    name: Google-SecOps-Linux
+  - id: d-grrcon-google-secops
+    name: grrcon-google-secops

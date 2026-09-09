@@ -91,7 +91,8 @@ loud; it is the honest cost of routing this way.
 
 ## 7. Isolate the SecOps destination
 
-**Click `Google-SecOps-Linux` in the sidebar under Destinations.**
+**Click `grrcon-google-secops` in the sidebar under Destinations.**
+(The screenshot predates the rename and still shows `Google-SecOps-Linux`.)
 
 ![Isolate SecOps](manual-demo-advanced-pipeline-editor-screenshots/bpss_08-sidebar-isolate-secops.png)
 

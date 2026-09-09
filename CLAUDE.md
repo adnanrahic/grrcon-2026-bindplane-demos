@@ -72,11 +72,12 @@ a mocked service-account key. Export errors are the *evidence records arrived* �
 count them per exporter to prove a route works. Google SecOps is the exception:
 it fails quietly, so a low error count there is not success.
 
-**Only `grrcon-*` resources are wiped nightly.** `Elastic`, `Dynatrace`,
-`Google-SecOps-Linux` and `Splunk-HEC` carry no prefix, so they survive — which
-is why their absence from `bindplane/` went unnoticed for so long. They are
-committed now; a fresh server (`selfhosted/`) is the only thing that catches
-this class of gap, because cloud always has the leftovers.
+**Every resource this repo owns is `grrcon-` prefixed, destinations included.**
+That is what keeps `bindplane apply` from touching the shared account: it used
+to reference `Elastic`, `Dynatrace`, `Google-SecOps-Linux` and `Splunk-HEC` by
+name and overwrite them. Never add an unprefixed resource to `bindplane/` — and
+note the prefix is also what the nightly wipe matches, so anything you add is
+rebuilt from the repo, not left behind to mask a gap.
 
 **A nightly job wipes the `grrcon-*` resources.** Assume the account is empty
 every morning: check before doing anything, and expect to `bindplane apply -f

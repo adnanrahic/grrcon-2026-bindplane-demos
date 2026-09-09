@@ -10,7 +10,7 @@
 apiVersion: bindplane.observiq.com/v1
 kind: Destination
 metadata:
-  name: Elastic
+  name: grrcon-elastic
 spec:
   type: elasticsearch_otlp
   parameters:

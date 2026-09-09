@@ -34,7 +34,7 @@ spec:
       logs:
       - id: '0'
         components:
-        - destinations/d-Elastic
+        - destinations/d-grrcon-elastic
   destinations:
-  - id: d-Elastic
-    name: Elastic
+  - id: d-grrcon-elastic
+    name: grrcon-elastic

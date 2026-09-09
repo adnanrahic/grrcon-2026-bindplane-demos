@@ -10,7 +10,7 @@
 apiVersion: bindplane.observiq.com/v1
 kind: Destination
 metadata:
-  name: Dynatrace
+  name: grrcon-dynatrace
 spec:
   type: dynatrace_otlp
   parameters:

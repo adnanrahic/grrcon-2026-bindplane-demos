@@ -11,10 +11,10 @@ Two things it fixes beyond the network: **the nightly wipe does not apply**
 (resources live in a local postgres volume, so version history survives), and
 **apply order is genuinely tested** — a fresh server is the one place
 `bindplane/`'s numeric prefixes have to be right. Standing this up is what
-caught the three destinations (`Elastic`, `Dynatrace`, `Google-SecOps-Linux`)
-that had only ever existed in the cloud UI: they have no `grrcon-` prefix, so
-the nightly wipe skipped them and nobody noticed they were missing from
-`bindplane/`.
+caught four destinations that had only ever existed in the cloud UI. They had no
+`grrcon-` prefix, so the nightly wipe skipped them, nobody noticed they were
+missing from `bindplane/`, and `apply` was quietly overwriting resources other
+demos share. They are `grrcon-` prefixed and committed now.
 
 ## Start it
 
@@ -117,6 +117,10 @@ get the pre-rollout "before" state back once you have rolled something out.
   gets agents a 401. Read the real one from `bindplane get projects`. It is
   stable for the life of the postgres volume, so `down -v` mints a new one and
   `../.env` goes stale.
+- **Wait for the type library on a first boot.** A brand-new volume seeds ~105
+  source types and ~60 destination types asynchronously, and applying before it
+  finishes fails with `unknown SourceType: apache_common`. It takes seconds, so
+  just re-run the apply — it is not a broken install.
 - **The license is not committed** — this repo is public. Paste it bare; compose
   does not strip quotes, so `'H4sIA...'` is read *with* them and the server
   refuses to start.

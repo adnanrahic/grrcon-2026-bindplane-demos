@@ -40,7 +40,7 @@ spec:
       logs:
       - id: '0'
         components:
-        - destinations/d-Splunk-HEC
+        - destinations/d-grrcon-splunk-hec
   destinations:
-  - id: d-Splunk-HEC
-    name: Splunk-HEC
+  - id: d-grrcon-splunk-hec
+    name: grrcon-splunk-hec

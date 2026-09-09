@@ -54,13 +54,15 @@ connector with nothing to observe it. See `.claude/70-operations.md` for how to
 confirm flow, and "Detecting a misroute" in `.claude/50-routing.md` for what
 that costs.
 
-### Why `Google-SecOps-Linux`, not `Google-SecOps`
+### Why `grrcon-google-secops` is its own resource
 
-The account holds both. `Google-SecOps` points at `C:/credentials.json`, a
-Windows path -- inside a Linux container the exporter dies at startup with
-`load Google credentials: read credentials file`, and the rollout halts on the
-first collector. `Google-SecOps-Linux` expects `/opt/credentials.json`, which is
-where compose mounts the dummy file.
+The account also holds a shared `Google-SecOps` and `Google-SecOps-Linux`. The
+repo uses neither. `Google-SecOps` points at `C:/credentials.json`, a Windows
+path -- inside a Linux container the exporter dies at startup with `load Google
+credentials: read credentials file`, and the rollout halts on the first
+collector. `grrcon-google-secops` is ours, expects `/opt/credentials.json` where
+compose mounts the dummy file, and cannot be broken by someone editing the
+shared one.
 
 ## Native formats: files, not the wire
 

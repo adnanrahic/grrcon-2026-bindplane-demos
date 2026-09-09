@@ -41,30 +41,30 @@ spec:
       logs:
       - id: winsec
         components:
-        - destinations/d-Google-SecOps-Linux
+        - destinations/d-grrcon-google-secops
       - id: paloalto
         components:
-        - destinations/d-Dynatrace
+        - destinations/d-grrcon-dynatrace
       - id: appjson
         components:
         - destinations/d-grrcon-google-gcl
       - id: apache
         components:
-        - destinations/d-Elastic
+        - destinations/d-grrcon-elastic
       - id: cef
         components:
-        - destinations/d-Splunk-HEC
+        - destinations/d-grrcon-splunk-hec
   destinations:
-  - id: d-Google-SecOps-Linux
-    name: Google-SecOps-Linux
-  - id: d-Dynatrace
-    name: Dynatrace
+  - id: d-grrcon-google-secops
+    name: grrcon-google-secops
+  - id: d-grrcon-dynatrace
+    name: grrcon-dynatrace
   - id: d-grrcon-google-gcl
     name: grrcon-google-gcl
-  - id: d-Elastic
-    name: Elastic
-  - id: d-Splunk-HEC
-    name: Splunk-HEC
+  - id: d-grrcon-elastic
+    name: grrcon-elastic
+  - id: d-grrcon-splunk-hec
+    name: grrcon-splunk-hec
   rollout:
     type: progressive
     parameters:

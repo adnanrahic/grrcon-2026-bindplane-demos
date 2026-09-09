@@ -151,7 +151,7 @@ load Google credentials: read credentials file: open C:/credentials.json: no suc
 ```
 
 — a Windows path on a Linux container, from the account's `Google-SecOps`
-destination. `Google-SecOps-Linux`, which this pipeline uses, points at
+destination. `grrcon-google-secops`, which this pipeline uses, points at
 `/opt/credentials.json`.
 
 **The credentials are a dummy** — a real 2048-bit RSA key with a fake identity,
